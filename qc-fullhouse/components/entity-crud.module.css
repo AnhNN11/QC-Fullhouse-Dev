@@ -1,0 +1,23 @@
+.wrapper { padding: 27px 30px 44px; }
+.heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 23px; }
+.heading h2 { margin: 0 0 3px !important; color: #192b45 !important; font-size: 24px !important; }
+.heading > div > span { color: #7b8797; font-size: 13px; }
+.card { border: 1px solid #e8ecf1 !important; box-shadow: 0 3px 12px rgba(24,39,75,.035); }
+.toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.toolbar :global(.ant-input-affix-wrapper) { max-width: 360px; }
+.toolbar > span { color: #8a96a6; font-size: 12px; }
+.card :global(.ant-table-thead > tr > th) { background: #f7f9fb; color: #7f8b9b; font-size: 11px; }
+.card :global(.ant-table-tbody strong) { display: block; color: #27374d; font-size: 13px; }
+.card :global(.ant-table-tbody small) { display: block; max-width: 260px; overflow: hidden; margin-top: 3px; color: #98a2b0; text-overflow: ellipsis; white-space: nowrap; }
+.form { display: grid; grid-template-columns: 1fr 1fr; column-gap: 16px; margin-top: 20px; }
+.form :global(.ant-form-item:has(textarea)) { grid-column: 1 / -1; }
+
+@media (max-width: 640px) {
+  .wrapper { padding: 20px 14px 32px; }
+  .heading { align-items: flex-start; flex-direction: column; }
+  .heading h2 { font-size: 20px !important; }
+  .heading > div:last-child { width: 100%; }
+  .toolbar { align-items: flex-start; flex-direction: column; }
+  .toolbar :global(.ant-input-affix-wrapper) { max-width: none; }
+  .form { display: block; }
+}
