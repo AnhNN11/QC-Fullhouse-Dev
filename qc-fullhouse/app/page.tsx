@@ -33,6 +33,7 @@ import {
   FormOutlined,
   HomeOutlined,
   InfoCircleOutlined,
+  LogoutOutlined,
   MenuFoldOutlined,
   ReadOutlined,
   RightOutlined,
@@ -42,6 +43,7 @@ import {
   UserOutlined,
 } from "@ant-design/icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { DashboardData, TeacherRecord } from "@/lib/dashboard-types";
 import EntityCrud from "@/components/entity-crud";
 import DailyReport from "@/components/daily-report";
@@ -79,6 +81,7 @@ function BrandMark() {
 
 function QualityDashboard() {
   const { message } = App.useApp();
+  const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
   const [selectedMenu, setSelectedMenu] = useState("overview");
   const [search, setSearch] = useState("");
@@ -89,6 +92,12 @@ function QualityDashboard() {
   const [evaluationSessionsLoading, setEvaluationSessionsLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [evaluationForm] = Form.useForm();
+
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.replace("/login");
+    router.refresh();
+  }
 
   const loadDashboard = useCallback(async (signal?: AbortSignal) => {
     const response = await fetch("/api/dashboard", { signal, cache: "no-store" });
@@ -226,6 +235,7 @@ function QualityDashboard() {
           <div className={styles.userMenu}>
             <Avatar className={styles.headerAvatar}>QC</Avatar>
             <div className={styles.headerUserText}><strong>QC Fullhouse</strong><span>Quản lý chất lượng</span></div>
+            <Button type="text" icon={<LogoutOutlined />} aria-label="Đăng xuất" title="Đăng xuất" onClick={() => void logout()} />
           </div>
         </Header>
 

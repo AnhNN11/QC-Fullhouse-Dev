@@ -26,6 +26,8 @@
 .headerTitle { color: #28374c; font-size: 15px; font-weight: 650; }
 .userMenu { display: flex; align-items: center; }
 .userMenu { gap: 9px; color: #7d8999; text-align: left; }
+.userMenu > button { margin-left: 5px; color: #7d8999; }
+.userMenu > button:hover { color: #d84a4a !important; background: #fff1f0 !important; }
 .headerUserText strong { font-size: 12px; }
 .headerUserText span { font-size: 10px; }
 .content { width: 100%; max-width: 1520px; margin: 0 auto; padding: 27px 30px 44px; }

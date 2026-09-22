@@ -1,12 +1,5 @@
 import { Db, MongoClient, ServerApiVersion } from "mongodb";
 
-const uri = process.env.MONGODB_URI;
-const databaseName = process.env.MONGODB_DB ?? "fullhouse_qc";
-
-if (!uri) {
-  throw new Error("MONGODB_URI chưa được cấu hình trong biến môi trường.");
-}
-
 const options = {
   serverApi: {
     version: ServerApiVersion.v1,
@@ -19,16 +12,20 @@ declare global {
   var mongoClientPromise: Promise<MongoClient> | undefined;
 }
 
-const clientPromise =
-  global.mongoClientPromise ?? new MongoClient(uri, options).connect();
+function getClientPromise() {
+  const uri = process.env.MONGODB_URI;
+  if (!uri) {
+    throw new Error("MONGODB_URI chưa được cấu hình trên môi trường triển khai.");
+  }
 
-if (process.env.NODE_ENV !== "production") {
-  global.mongoClientPromise = clientPromise;
+  if (!global.mongoClientPromise) {
+    global.mongoClientPromise = new MongoClient(uri, options).connect();
+  }
+
+  return global.mongoClientPromise;
 }
 
 export async function getDatabase(): Promise<Db> {
-  const client = await clientPromise;
-  return client.db(databaseName);
+  const client = await getClientPromise();
+  return client.db(process.env.MONGODB_DB ?? "fullhouse_qc");
 }
-
-export default clientPromise;
