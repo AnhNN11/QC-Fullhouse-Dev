@@ -7,12 +7,9 @@ import {
   Card,
   Col,
   ConfigProvider,
-  Form,
   Input,
-  InputNumber,
   Layout,
   Menu,
-  Modal,
   Progress,
   Row,
   Select,
@@ -24,13 +21,10 @@ import {
 import type { MenuProps, TableProps } from "antd";
 import viVN from "antd/locale/vi_VN";
 import {
-  AppstoreOutlined,
   CalendarOutlined,
   CheckCircleFilled,
   ClockCircleOutlined,
   FileSearchOutlined,
-  FileDoneOutlined,
-  FormOutlined,
   HomeOutlined,
   InfoCircleOutlined,
   LogoutOutlined,
@@ -47,8 +41,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { DashboardData, TeacherRecord } from "@/lib/dashboard-types";
 import EntityCrud from "@/components/entity-crud";
-import DailyReport from "@/components/daily-report";
 import SessionCalendar from "@/components/session-calendar";
+import SessionQc from "@/components/session-qc";
 import styles from "./page.module.css";
 
 const { Header, Sider, Content } = Layout;
@@ -61,20 +55,12 @@ const defaultDashboard: DashboardData = {
   tip: "Chưa có dữ liệu gợi ý.",
 };
 
-type EvaluationSessionOption = {
-  value: string;
-  label: string;
-};
-
 const navItems: MenuProps["items"] = [
   { key: "overview", icon: <HomeOutlined />, label: "Tổng quan" },
   { key: "teachers", icon: <TeamOutlined />, label: "Quản lý giáo viên" },
   { key: "contests", icon: <TrophyOutlined />, label: "Quản lý contest" },
-  { key: "courses", icon: <ReadOutlined />, label: "Quản lý khóa học" },
-  { key: "classes", icon: <AppstoreOutlined />, label: "Quản lý lớp học" },
-  { key: "sessions", icon: <ClockCircleOutlined />, label: "Buổi học & record" },
+  { key: "qc-sessions", icon: <FileSearchOutlined />, label: "QC buổi học" },
   { key: "calendar", icon: <CalendarOutlined />, label: "Lịch buổi học" },
-  { key: "daily-report", icon: <FileDoneOutlined />, label: "Daily QC Report" },
 ];
 
 function BrandMark() {
@@ -89,11 +75,6 @@ function QualityDashboard() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [dashboard, setDashboard] = useState<DashboardData>(defaultDashboard);
-  const [evaluationOpen, setEvaluationOpen] = useState(false);
-  const [evaluationSessions, setEvaluationSessions] = useState<EvaluationSessionOption[]>([]);
-  const [evaluationSessionsLoading, setEvaluationSessionsLoading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [evaluationForm] = Form.useForm();
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -106,33 +87,6 @@ function QualityDashboard() {
     if (!response.ok) throw new Error("Không thể tải dashboard");
     setDashboard((await response.json()) as DashboardData);
   }, []);
-
-  const loadEvaluationSessions = useCallback(async () => {
-    setEvaluationSessionsLoading(true);
-    try {
-      const [sessionResponse, classResponse] = await Promise.all([
-        fetch("/api/manage/sessions", { cache: "no-store" }),
-        fetch("/api/manage/classes", { cache: "no-store" }),
-      ]);
-      if (!sessionResponse.ok || !classResponse.ok) throw new Error("Không thể tải danh sách buổi học");
-      const sessionResult = (await sessionResponse.json()) as { items: Array<{ id: string; classId: string; sessionNo: number; date: string; startTime: string; recordingStatus: string }> };
-      const classResult = (await classResponse.json()) as { items: Array<{ id: string; code: string; name: string }> };
-      const classMap = new Map(classResult.items.map((item) => [item.id, item]));
-      setEvaluationSessions(sessionResult.items
-        .filter((item) => ["ready", "issue", "reviewed"].includes(item.recordingStatus))
-        .map((item) => {
-          const classItem = classMap.get(item.classId);
-          return {
-            value: item.id,
-            label: `${item.date} · ${item.startTime} · ${classItem?.code ?? "Lớp không xác định"} · Buổi ${item.sessionNo}${item.recordingStatus === "reviewed" ? " · Đã đánh giá" : ""}`,
-          };
-        }));
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : "Không thể tải danh sách buổi học");
-    } finally {
-      setEvaluationSessionsLoading(false);
-    }
-  }, [message]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -149,31 +103,10 @@ function QualityDashboard() {
     };
   }, [loadDashboard, message]);
 
-  async function submitEvaluation(values: { sessionId: string; score: number; note?: string }) {
-    setSubmitting(true);
-    try {
-      const response = await fetch("/api/evaluations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
-      });
-      const result = (await response.json()) as { error?: string; message?: string };
-      if (!response.ok) throw new Error(result.error ?? "Không thể lưu đánh giá");
-      message.success(result.message ?? "Đã lưu phiếu đánh giá");
-      evaluationForm.resetFields();
-      setEvaluationOpen(false);
-      await Promise.all([loadDashboard(), loadEvaluationSessions()]);
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : "Không thể lưu đánh giá");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
   const filteredRecords = useMemo(() => {
     const keyword = search.trim().toLowerCase();
     return dashboard.teachers.filter((item) => {
-      const matchesSearch = !keyword || item.name.toLowerCase().includes(keyword) || item.subject.toLowerCase().includes(keyword);
+      const matchesSearch = !keyword || item.name.toLowerCase().includes(keyword);
       return matchesSearch && (status === "all" || item.status === status);
     });
   }, [dashboard.teachers, search, status]);
@@ -181,14 +114,10 @@ function QualityDashboard() {
   const columns: TableProps<TeacherRecord>["columns"] = [
     {
       title: "GIÁO VIÊN", dataIndex: "name", key: "name",
-      render: (_, record) => <Space size={10}><Avatar className={styles.avatar}>{record.initials}</Avatar><div><Text className={styles.className}>{record.name}</Text><div className={styles.classCode}>{record.subject}</div></div></Space>,
+      render: (_, record) => <Space size={10}><Avatar className={styles.avatar}>{record.initials}</Avatar><Text className={styles.className}>{record.name}</Text></Space>,
     },
     {
-      title: "CHUYÊN MÔN", dataIndex: "subject", key: "subject",
-      render: (value: string) => <Text className={styles.timeCell}>{value}</Text>,
-    },
-    {
-      title: "SỐ LỚP", dataIndex: "classes", key: "classes", align: "center",
+      title: "BUỔI ĐÃ CRAWL", dataIndex: "classes", key: "classes", align: "center",
       render: (value: number) => <Space size={6}><ReadOutlined className={styles.mutedIcon} /><Text>{value}</Text></Space>,
     },
     {
@@ -244,7 +173,7 @@ function QualityDashboard() {
         {selectedMenu === "overview" ? <Content className={styles.content}>
           <section className={styles.welcomeSection}>
             <div><Title level={2}>Tổng quan chất lượng giảng dạy</Title><Text>Theo dõi hiệu suất và các vấn đề cần ưu tiên của đội ngũ giáo viên.</Text></div>
-            <Button type="primary" icon={<FormOutlined />} onClick={() => { setEvaluationOpen(true); void loadEvaluationSessions(); }}>Tạo phiếu đánh giá</Button>
+            <Button type="primary" icon={<FileSearchOutlined />} onClick={() => setSelectedMenu("qc-sessions")}>Mở danh sách QC</Button>
           </section>
 
           <Row gutter={[18, 18]} className={styles.statsRow}>
@@ -259,7 +188,7 @@ function QualityDashboard() {
               <Card className={`${styles.panelCard} ${styles.tableCard}`}>
                 <div className={styles.cardHeading}><div><Title level={4}>Hiệu suất giáo viên</Title><Text>Danh sách và trạng thái chất lượng đội ngũ</Text></div></div>
                 <div className={styles.tableToolbar}>
-                  <Input allowClear prefix={<SearchOutlined />} placeholder="Tìm giáo viên hoặc chuyên môn..." value={search} onChange={(event) => setSearch(event.target.value)} />
+                  <Input allowClear prefix={<SearchOutlined />} placeholder="Tìm giáo viên..." value={search} onChange={(event) => setSearch(event.target.value)} />
                   <Select value={status} onChange={setStatus} options={[{ value: "all", label: "Tất cả trạng thái" }, { value: "active", label: "Đạt yêu cầu" }, { value: "reviewing", label: "Cần theo dõi" }, { value: "warning", label: "Cần hỗ trợ" }]} />
                 </div>
                 <Table columns={columns} dataSource={filteredRecords} pagination={false} scroll={{ x: 820 }} className={styles.qualityTable} />
@@ -268,53 +197,23 @@ function QualityDashboard() {
             </Col>
             <Col xs={24} xl={8}>
               <Card className={`${styles.panelCard} ${styles.scheduleCard}`}>
-                <div className={styles.cardHeading}><div><Title level={4}>Record chờ kiểm tra</Title><Text>Các buổi học cần QC xem lại</Text></div><Button type="text" icon={<CalendarOutlined />} aria-label="Danh sách record" onClick={() => setSelectedMenu("sessions")} /></div>
+                <div className={styles.cardHeading}><div><Title level={4}>Record chờ kiểm tra</Title><Text>Các buổi học cần QC xem lại</Text></div><Button type="text" icon={<CalendarOutlined />} aria-label="Danh sách record" onClick={() => setSelectedMenu("qc-sessions")} /></div>
                 <div className={styles.scheduleList}>
-                  {dashboard.pendingRecordings.map((item) => <div className={styles.scheduleItem} key={`${item.day}-${item.title}`}><div className={`${styles.dateBox} ${styles[item.color]}`}><strong>{item.day}</strong><span>{item.month}</span></div><div className={styles.scheduleInfo}><strong>{item.title}</strong><span><UserOutlined /> {item.teacher}</span><span><ClockCircleOutlined /> {item.reviewStatus}</span></div><Button type="text" icon={<RightOutlined />} aria-label={`Xem ${item.title}`} onClick={() => setSelectedMenu("sessions")} /></div>)}
+                  {dashboard.pendingRecordings.map((item) => <div className={styles.scheduleItem} key={`${item.day}-${item.title}`}><div className={`${styles.dateBox} ${styles[item.color]}`}><strong>{item.day}</strong><span>{item.month}</span></div><div className={styles.scheduleInfo}><strong>{item.title}</strong><span><UserOutlined /> {item.teacher}</span><span><ClockCircleOutlined /> {item.reviewStatus}</span></div><Button type="text" icon={<RightOutlined />} aria-label={`Xem ${item.title}`} onClick={() => setSelectedMenu("qc-sessions")} /></div>)}
                 </div>
-                <Button block className={styles.detailButton} onClick={() => setSelectedMenu("sessions")}>Xem toàn bộ record <RightOutlined /></Button>
+                <Button block className={styles.detailButton} onClick={() => setSelectedMenu("qc-sessions")}>Xem toàn bộ record <RightOutlined /></Button>
               </Card>
               <div className={styles.tipCard}><div className={styles.tipIcon}>💡</div><div><strong>Gợi ý cải thiện</strong><p>{dashboard.tip}</p></div></div>
             </Col>
           </Row>
         </Content> : selectedMenu === "calendar" ? (
           <Content><SessionCalendar /></Content>
-        ) : selectedMenu === "daily-report" ? (
-          <Content><DailyReport /></Content>
-        ) : ["teachers", "contests", "courses", "classes", "sessions"].includes(selectedMenu) ? (
-          <Content><EntityCrud entity={selectedMenu as "teachers" | "contests" | "courses" | "classes" | "sessions"} /></Content>
+        ) : selectedMenu === "qc-sessions" ? (
+          <Content><SessionQc /></Content>
+        ) : ["teachers", "contests"].includes(selectedMenu) ? (
+          <Content><EntityCrud entity={selectedMenu as "teachers" | "contests"} /></Content>
         ) : null}
       </Layout>
-
-      <Modal
-        title="Đánh giá record buổi học"
-        open={evaluationOpen}
-        onCancel={() => setEvaluationOpen(false)}
-        onOk={() => evaluationForm.submit()}
-        okText="Lưu đánh giá"
-        cancelText="Hủy"
-        confirmLoading={submitting}
-        destroyOnHidden
-      >
-        <Form form={evaluationForm} layout="vertical" onFinish={submitEvaluation} initialValues={{ score: 90 }}>
-          <Form.Item name="sessionId" label="Buổi học / record" rules={[{ required: true, message: "Vui lòng chọn buổi học cần đánh giá" }]}>
-            <Select
-              showSearch
-              loading={evaluationSessionsLoading}
-              placeholder="Chọn record theo ngày, lớp và số buổi"
-              optionFilterProp="label"
-              options={evaluationSessions}
-              notFoundContent={evaluationSessionsLoading ? "Đang tải..." : "Không có record cần đánh giá"}
-            />
-          </Form.Item>
-          <Form.Item name="score" label="Điểm QC" rules={[{ required: true, message: "Vui lòng nhập điểm" }]}>
-            <InputNumber min={0} max={100} style={{ width: "100%" }} suffix="/ 100" />
-          </Form.Item>
-          <Form.Item name="note" label="Ghi chú">
-            <Input.TextArea rows={4} maxLength={500} showCount placeholder="Điểm làm tốt và nội dung cần cải thiện..." />
-          </Form.Item>
-        </Form>
-      </Modal>
     </Layout>
   );
 }

@@ -6,7 +6,6 @@ import {
   Card,
   Form,
   Input,
-  InputNumber,
   Modal,
   Popconfirm,
   Select,
@@ -20,7 +19,6 @@ import {
   DeleteOutlined,
   EditOutlined,
   LinkOutlined,
-  PlayCircleOutlined,
   PlusOutlined,
   ReloadOutlined,
   SearchOutlined,
@@ -28,26 +26,21 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import styles from "./entity-crud.module.css";
 
-type EntityName = "teachers" | "courses" | "classes" | "sessions" | "contests";
+type EntityName = "teachers" | "contests";
 type EntityRecord = Record<string, unknown> & { id: string };
 
 type FieldDefinition = {
   name: string;
   label: string;
   required?: boolean;
-  type?: "text" | "number" | "textarea" | "date" | "time" | "datetime-local" | "select";
+  type?: "text" | "textarea" | "datetime-local" | "select";
   options?: Array<{ label: string; value: string }>;
   placeholder?: string;
-  min?: number;
-  max?: number;
   mode?: "multiple";
 };
 
 const entityMeta: Record<EntityName, { title: string; singular: string; description: string }> = {
-  teachers: { title: "Quản lý giáo viên", singular: "giáo viên", description: "Thông tin chuyên môn và trạng thái chất lượng của đội ngũ." },
-  courses: { title: "Quản lý khóa học", singular: "khóa học", description: "Danh mục chương trình và lộ trình đào tạo Fullhouse." },
-  classes: { title: "Quản lý lớp học", singular: "lớp học", description: "Phân công giáo viên, lịch học và quy mô từng lớp." },
-  sessions: { title: "Buổi học & record", singular: "buổi học", description: "Quản lý record và kết quả QC của từng buổi trong mỗi lớp." },
+  teachers: { title: "Quản lý giáo viên", singular: "giáo viên", description: "Thông tin và trạng thái chất lượng của đội ngũ." },
   contests: { title: "Quản lý contest", singular: "contest", description: "Phân công giáo viên và theo dõi thời hạn của từng contest Fullhouse." },
 };
 
@@ -57,30 +50,8 @@ const statusOptions: Record<EntityName, Array<{ label: string; value: string }>>
     { label: "Cần theo dõi", value: "reviewing" },
     { label: "Cần hỗ trợ", value: "warning" },
   ],
-  courses: [
-    { label: "Đang tuyển sinh", value: "active" },
-    { label: "Bản nháp", value: "draft" },
-    { label: "Đã lưu trữ", value: "archived" },
-  ],
-  classes: [
-    { label: "Đang học", value: "active" },
-    { label: "Sắp khai giảng", value: "upcoming" },
-    { label: "Đã kết thúc", value: "completed" },
-  ],
-  sessions: [
-    { label: "Đã lên lịch", value: "scheduled" },
-    { label: "Đã hoàn thành", value: "completed" },
-    { label: "Đã hủy", value: "cancelled" },
-  ],
   contests: [],
 };
-
-const recordingStatusOptions = [
-  { label: "Chờ tải record", value: "pending_upload" },
-  { label: "Chờ QC kiểm tra", value: "ready" },
-  { label: "Đã kiểm tra", value: "reviewed" },
-  { label: "Record có vấn đề", value: "issue" },
-];
 
 function tagColor(status: unknown) {
   if (["active", "completed"].includes(String(status))) return "green";
@@ -121,12 +92,13 @@ export default function EntityCrud({ entity }: { entity: EntityName }) {
   const { message } = App.useApp();
   const [items, setItems] = useState<EntityRecord[]>([]);
   const [teachers, setTeachers] = useState<EntityRecord[]>([]);
-  const [courses, setCourses] = useState<EntityRecord[]>([]);
-  const [classes, setClasses] = useState<EntityRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [search, setSearch] = useState("");
+  const [teacherFilter, setTeacherFilter] = useState("all");
+  const [timingFilter, setTimingFilter] = useState("all");
+  const [assignmentFilter, setAssignmentFilter] = useState("all");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<EntityRecord | null>(null);
   const [form] = Form.useForm();
@@ -142,16 +114,12 @@ export default function EntityCrud({ entity }: { entity: EntityName }) {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [main, teacherList, courseList, classList] = await Promise.all([
+      const [main, teacherList] = await Promise.all([
         fetchEntity(entity),
-        ["classes", "contests"].includes(entity) ? fetchEntity("teachers") : Promise.resolve([]),
-        entity === "classes" ? fetchEntity("courses") : Promise.resolve([]),
-        entity === "sessions" ? fetchEntity("classes") : Promise.resolve([]),
+        entity === "contests" ? fetchEntity("teachers") : Promise.resolve([]),
       ]);
       setItems(main);
       setTeachers(teacherList);
-      setCourses(courseList);
-      setClasses(classList);
     } catch (error) {
       message.error(error instanceof Error ? error.message : "Không thể tải dữ liệu");
     } finally {
@@ -187,31 +155,10 @@ export default function EntityCrud({ entity }: { entity: EntityName }) {
     if (entity === "teachers") return [
       { name: "code", label: "Mã giáo viên", required: true, placeholder: "GV-001" },
       { name: "name", label: "Họ và tên", required: true },
-      { name: "subject", label: "Chuyên môn", required: true },
       { name: "email", label: "Email", type: "text" },
-      { name: "phone", label: "Số điện thoại", type: "text" },
       { name: "status", label: "Trạng thái", required: true, type: "select", options: statusOptions.teachers },
     ];
-    if (entity === "courses") return [
-      { name: "code", label: "Mã khóa học", required: true, placeholder: "KH-EF1" },
-      { name: "name", label: "Tên khóa học", required: true },
-      { name: "level", label: "Trình độ", required: true, placeholder: "Foundation / IELTS / Junior" },
-      { name: "durationWeeks", label: "Thời lượng (tuần)", required: true, type: "number", min: 1, max: 104 },
-      { name: "description", label: "Mô tả", type: "textarea" },
-      { name: "status", label: "Trạng thái", required: true, type: "select", options: statusOptions.courses },
-    ];
-    if (entity === "classes") return [
-      { name: "code", label: "Mã lớp", required: true, placeholder: "FH-EF1-0426" },
-      { name: "name", label: "Tên lớp", required: true },
-      { name: "courseId", label: "Khóa học", required: true, type: "select", options: courses.map((item) => ({ value: item.id, label: `${item.code} · ${item.name}` })) },
-      { name: "teacherId", label: "Giáo viên phụ trách", required: true, type: "select", options: teachers.map((item) => ({ value: item.id, label: `${item.code ?? "GV"} · ${item.name}` })) },
-      { name: "startDate", label: "Ngày khai giảng", required: true, type: "date" },
-      { name: "schedule", label: "Lịch học", required: true, placeholder: "Thứ 2, 4 · 18:00–19:30" },
-      { name: "room", label: "Phòng học" },
-      { name: "studentCount", label: "Số học viên", type: "number", min: 0, max: 100 },
-      { name: "status", label: "Trạng thái", required: true, type: "select", options: statusOptions.classes },
-    ];
-    if (entity === "contests") return [
+    return [
       { name: "code", label: "Mã contest", required: true, placeholder: "cpp62" },
       { name: "name", label: "Tên contest", required: true, placeholder: "Lập trình C++ | Fullhouse Dev 62" },
       { name: "teacherIds", label: "Giáo viên phụ trách", required: true, type: "select", mode: "multiple", options: teachers.map((item) => ({ value: item.id, label: `${item.code ?? "GV"} · ${item.name}` })) },
@@ -220,20 +167,7 @@ export default function EntityCrud({ entity }: { entity: EntityName }) {
       { name: "sourceUrl", label: "Đường dẫn contest", placeholder: "https://fullhousedev.com/contest/..." },
       { name: "notes", label: "Ghi chú", type: "textarea" },
     ];
-    return [
-      { name: "classId", label: "Lớp học", required: true, type: "select", options: classes.map((item) => ({ value: item.id, label: `${item.code} · ${item.name}` })) },
-      { name: "sessionNo", label: "Số buổi", required: true, type: "number", min: 1, max: 500 },
-      { name: "date", label: "Ngày học", required: true, type: "date" },
-      { name: "startTime", label: "Giờ bắt đầu", required: true, type: "time" },
-      { name: "endTime", label: "Giờ kết thúc", required: true, type: "time" },
-      { name: "topic", label: "Nội dung buổi học", required: true },
-      { name: "note", label: "Ghi chú", type: "textarea" },
-      { name: "recordingUrl", label: "Đường dẫn record", placeholder: "https://drive.google.com/..." },
-      { name: "recordingStatus", label: "Trạng thái record", required: true, type: "select", options: recordingStatusOptions },
-      { name: "qcNote", label: "Nhận xét của QC", type: "textarea" },
-      { name: "status", label: "Trạng thái", required: true, type: "select", options: statusOptions.sessions },
-    ];
-  }, [classes, courses, entity, teachers]);
+  }, [entity, teachers]);
 
   const columns = useMemo<TableColumnsType<EntityRecord>>(() => {
     const statusColumn = {
@@ -253,26 +187,9 @@ export default function EntityCrud({ entity }: { entity: EntityName }) {
     if (entity === "teachers") return [
       { title: "MÃ", dataIndex: "code", key: "code", width: 100 },
       { title: "GIÁO VIÊN", dataIndex: "name", key: "name", render: (value, record) => <div><strong>{String(value)}</strong><small>{String(record.email ?? "Chưa có email")}</small></div> },
-      { title: "CHUYÊN MÔN", dataIndex: "subject", key: "subject" },
-      { title: "ĐIỆN THOẠI", dataIndex: "phone", key: "phone", render: (value) => String(value ?? "—") },
       statusColumn, actions,
     ];
-    if (entity === "courses") return [
-      { title: "MÃ", dataIndex: "code", key: "code", width: 110 },
-      { title: "KHÓA HỌC", dataIndex: "name", key: "name", render: (value, record) => <div><strong>{String(value)}</strong><small>{String(record.description ?? "")}</small></div> },
-      { title: "TRÌNH ĐỘ", dataIndex: "level", key: "level" },
-      { title: "THỜI LƯỢNG", dataIndex: "durationWeeks", key: "durationWeeks", render: (value) => `${String(value)} tuần` },
-      statusColumn, actions,
-    ];
-    if (entity === "classes") return [
-      { title: "MÃ LỚP", dataIndex: "code", key: "code", width: 120 },
-      { title: "LỚP HỌC", dataIndex: "name", key: "name", render: (value, record) => <div><strong>{String(value)}</strong><small>{relationName(courses, record.courseId)}</small></div> },
-      { title: "GIÁO VIÊN", key: "teacherId", render: (_, record) => relationNames(teachers, record.teacherIds ?? record.teacherId) },
-      { title: "LỊCH HỌC", dataIndex: "schedule", key: "schedule" },
-      { title: "HỌC VIÊN", dataIndex: "studentCount", key: "studentCount", align: "center" },
-      statusColumn, actions,
-    ];
-    if (entity === "contests") return [
+    return [
       { title: "CONTEST", dataIndex: "name", key: "name", render: (value, record) => <div><strong>{String(value)}</strong><small>{String(record.code ?? "—")}</small></div> },
       { title: "GIÁO VIÊN", key: "teacherIds", width: 210, render: (_, record) => relationNames(teachers, record.teacherIds ?? record.teacherId, "Chưa phân công") },
       { title: "BẮT ĐẦU", dataIndex: "startTime", key: "startTime", width: 150, render: formatDateTime },
@@ -281,26 +198,15 @@ export default function EntityCrud({ entity }: { entity: EntityName }) {
       { title: "LINK", dataIndex: "sourceUrl", key: "sourceUrl", width: 90, render: (value) => value ? <Button type="link" size="small" icon={<LinkOutlined />} href={String(value)} target="_blank" rel="noreferrer">Mở</Button> : <Typography.Text type="secondary">—</Typography.Text> },
       actions,
     ];
-    return [
-      { title: "LỚP HỌC", dataIndex: "classId", key: "classId", render: (value) => relationName(classes, value) },
-      { title: "BUỔI", dataIndex: "sessionNo", key: "sessionNo", width: 75, align: "center" },
-      { title: "NGÀY", dataIndex: "date", key: "date", width: 115 },
-      { title: "THỜI GIAN", key: "time", render: (_, record) => `${record.startTime}–${record.endTime}` },
-      { title: "NỘI DUNG", dataIndex: "topic", key: "topic" },
-      { title: "RECORD", dataIndex: "recordingUrl", key: "recordingUrl", width: 115, render: (value) => value ? <Button type="link" size="small" icon={<PlayCircleOutlined />} href={String(value)} target="_blank" rel="noreferrer">Xem record</Button> : <Typography.Text type="secondary">Chưa có</Typography.Text> },
-      { title: "QC RECORD", dataIndex: "recordingStatus", key: "recordingStatus", width: 145, render: (value) => <Tag color={value === "reviewed" ? "green" : value === "issue" ? "red" : value === "ready" ? "blue" : "default"}>{recordingStatusOptions.find((item) => item.value === value)?.label ?? String(value)}</Tag> },
-      statusColumn, actions,
-    ];
   // Functions are stable for the lifetime of this render configuration.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [classes, courses, entity, meta.singular, now, relationNames, teachers]);
+  }, [entity, meta.singular, now, relationNames, teachers]);
 
   function openCreate() {
     setEditing(null);
     form.resetFields();
     form.setFieldsValue({
       ...(statusOptions[entity][0] ? { status: statusOptions[entity][0].value } : {}),
-      ...(entity === "sessions" ? { recordingStatus: "pending_upload" } : {}),
     });
     setModalOpen(true);
   }
@@ -346,7 +252,32 @@ export default function EntityCrud({ entity }: { entity: EntityName }) {
     }
   }
 
-  const filtered = items.filter((item) => JSON.stringify(item).toLowerCase().includes(search.toLowerCase()));
+  const filtered = items.filter((item) => {
+    if (!JSON.stringify(item).toLowerCase().includes(search.toLowerCase())) return false;
+    if (entity !== "contests") return true;
+
+    const teacherIds = Array.isArray(item.teacherIds)
+      ? item.teacherIds.map(String)
+      : item.teacherId ? [String(item.teacherId)] : [];
+    const realTeacherIds = teacherIds.filter((id) => {
+      const teacher = teachers.find((candidate) => String(candidate.id) === id);
+      return teacher && teacher.isPlaceholder !== true;
+    });
+    const assigned = realTeacherIds.length > 0;
+    if (teacherFilter !== "all" && !realTeacherIds.includes(teacherFilter)) return false;
+    if (assignmentFilter === "assigned" && !assigned) return false;
+    if (assignmentFilter === "unassigned" && assigned) return false;
+
+    if (timingFilter !== "all") {
+      const start = new Date(String(item.startTime)).getTime();
+      const end = new Date(String(item.endTime)).getTime();
+      const timing = !Number.isFinite(start) || !Number.isFinite(end)
+        ? "unknown"
+        : now < start ? "upcoming" : now <= end ? "ongoing" : "expired";
+      if (timing !== timingFilter) return false;
+    }
+    return true;
+  });
 
   return (
     <div className={styles.wrapper}>
@@ -355,7 +286,32 @@ export default function EntityCrud({ entity }: { entity: EntityName }) {
         <Space><Button icon={<ReloadOutlined />} onClick={loadData}>Làm mới</Button><Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>Thêm {meta.singular}</Button></Space>
       </div>
       <Card className={styles.card}>
-        <div className={styles.toolbar}><Input allowClear prefix={<SearchOutlined />} placeholder={`Tìm ${meta.singular}...`} value={search} onChange={(event) => setSearch(event.target.value)} /><Typography.Text>{filtered.length} bản ghi</Typography.Text></div>
+        <div className={styles.toolbar}>
+          <Input allowClear prefix={<SearchOutlined />} placeholder={`Tìm ${meta.singular}...`} value={search} onChange={(event) => setSearch(event.target.value)} />
+          {entity === "contests" && <>
+            <Select
+              value={teacherFilter}
+              onChange={setTeacherFilter}
+              options={[
+                { value: "all", label: "Tất cả giáo viên" },
+                ...teachers.filter((item) => item.isPlaceholder !== true).map((item) => ({ value: item.id, label: String(item.name) })),
+              ]}
+            />
+            <Select value={timingFilter} onChange={setTimingFilter} options={[
+              { value: "all", label: "Tất cả thời hạn" },
+              { value: "ongoing", label: "Đang diễn ra" },
+              { value: "upcoming", label: "Sắp diễn ra" },
+              { value: "expired", label: "Đã hết hạn" },
+              { value: "unknown", label: "Thiếu thời gian" },
+            ]} />
+            <Select value={assignmentFilter} onChange={setAssignmentFilter} options={[
+              { value: "all", label: "Tất cả phân công" },
+              { value: "assigned", label: "Đã phân công" },
+              { value: "unassigned", label: "Chưa phân công" },
+            ]} />
+          </>}
+          <Typography.Text>{filtered.length} bản ghi</Typography.Text>
+        </div>
         <Table rowKey="id" loading={loading} columns={columns} dataSource={filtered} scroll={{ x: 850 }} pagination={{ pageSize: 8, showSizeChanger: false }} />
       </Card>
 
@@ -363,9 +319,8 @@ export default function EntityCrud({ entity }: { entity: EntityName }) {
         <Form form={form} layout="vertical" onFinish={save} className={styles.form}>
           {fields.map((field) => <Form.Item key={field.name} name={field.name} label={field.label} rules={field.required ? [{ required: true, message: `Vui lòng nhập ${field.label.toLowerCase()}` }] : undefined}>
             {field.type === "select" ? <Select mode={field.mode} showSearch optionFilterProp="label" placeholder={field.placeholder ?? `Chọn ${field.label.toLowerCase()}`} options={field.options} />
-              : field.type === "number" ? <InputNumber min={field.min} max={field.max} style={{ width: "100%" }} />
               : field.type === "textarea" ? <Input.TextArea rows={3} maxLength={500} showCount />
-              : <Input type={["date", "time", "datetime-local"].includes(field.type ?? "") ? field.type : "text"} placeholder={field.placeholder} />}
+              : <Input type={field.type === "datetime-local" ? field.type : "text"} placeholder={field.placeholder} />}
           </Form.Item>)}
         </Form>
       </Modal>

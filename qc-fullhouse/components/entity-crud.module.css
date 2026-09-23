@@ -3,9 +3,10 @@
 .heading h2 { margin: 0 0 3px !important; color: #192b45 !important; font-size: 24px !important; }
 .heading > div > span { color: #7b8797; font-size: 13px; }
 .card { border: 1px solid #e8ecf1 !important; box-shadow: 0 3px 12px rgba(24,39,75,.035); }
-.toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
-.toolbar :global(.ant-input-affix-wrapper) { max-width: 360px; }
-.toolbar > span { color: #8a96a6; font-size: 12px; }
+.toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+.toolbar :global(.ant-input-affix-wrapper) { width: min(360px, 100%); }
+.toolbar :global(.ant-select) { min-width: 165px; }
+.toolbar > span:last-child { margin-left: auto; color: #8a96a6; font-size: 12px; white-space: nowrap; }
 .card :global(.ant-table-thead > tr > th) { background: #f7f9fb; color: #7f8b9b; font-size: 11px; }
 .card :global(.ant-table-tbody strong) { display: block; color: #27374d; font-size: 13px; }
 .card :global(.ant-table-tbody small) { display: block; max-width: 260px; overflow: hidden; margin-top: 3px; color: #98a2b0; text-overflow: ellipsis; white-space: nowrap; }
@@ -17,7 +18,8 @@
   .heading { align-items: flex-start; flex-direction: column; }
   .heading h2 { font-size: 20px !important; }
   .heading > div:last-child { width: 100%; }
-  .toolbar { align-items: flex-start; flex-direction: column; }
-  .toolbar :global(.ant-input-affix-wrapper) { max-width: none; }
+  .toolbar { align-items: stretch; flex-direction: column; }
+  .toolbar :global(.ant-input-affix-wrapper), .toolbar :global(.ant-select) { width: 100%; max-width: none; }
+  .toolbar > span:last-child { margin-left: 0; }
   .form { display: block; }
 }

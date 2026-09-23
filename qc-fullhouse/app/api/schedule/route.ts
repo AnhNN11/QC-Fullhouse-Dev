@@ -1,4 +1,3 @@
-import { ObjectId } from "mongodb";
 import { NextRequest, NextResponse } from "next/server";
 import { getDatabase } from "@/lib/mongodb";
 
@@ -13,35 +12,28 @@ export async function GET(request: NextRequest) {
   try {
     const db = await getDatabase();
     const sessions = await db.collection("class_sessions")
-      .find({ date: { $regex: `^${month}` } })
+      .find({
+        sourceSystem: "fullhousedev",
+        date: { $regex: `^${month}` },
+        "teacherNames.0": { $exists: true },
+        teacherNames: { $nin: ["Chưa phân công"] },
+      })
       .sort({ date: 1, startTime: 1 })
       .toArray();
-    const classIds = [...new Set(sessions.map((item) => String(item.classId)).filter(ObjectId.isValid))];
-    const classes = await db.collection("course_classes")
-      .find({ _id: { $in: classIds.map((id) => new ObjectId(id)) } })
-      .toArray();
-    const teacherIds = [...new Set(classes.map((item) => String(item.teacherId)).filter(ObjectId.isValid))];
-    const teachers = await db.collection("teachers")
-      .find({ _id: { $in: teacherIds.map((id) => new ObjectId(id)) } })
-      .toArray();
-    const classMap = new Map(classes.map((item) => [item._id.toString(), item]));
-    const teacherMap = new Map(teachers.map((item) => [item._id.toString(), item]));
 
     return NextResponse.json({
       month,
-      sessions: sessions.map(({ _id, ...session }) => {
-        const classItem = classMap.get(String(session.classId));
-        const teacher = classItem ? teacherMap.get(String(classItem.teacherId)) : undefined;
-        return {
-          id: _id.toString(),
-          ...session,
-          classCode: classItem?.code ?? "—",
-          className: classItem?.name ?? "Lớp không xác định",
-          room: classItem?.room ?? "—",
-          teacherName: teacher?.name ?? "Chưa phân công",
-          teacherInitials: teacher?.initials ?? "GV",
-        };
-      }),
+      sessions: sessions.map(({ _id, ...session }) => ({
+        id: _id.toString(),
+        ...session,
+        classCode: session.contestCode ?? "—",
+        className: session.contestName ?? "Contest chưa xác định",
+        room: "Fullhouse Online",
+        teacherName: Array.isArray(session.teacherNames) && session.teacherNames.length ? session.teacherNames.join(", ") : "Chưa phân công",
+        teacherInitials: Array.isArray(session.teacherNames) && session.teacherNames[0]
+          ? String(session.teacherNames[0]).split(/\s+/).slice(-2).map((part) => part[0]).join("").toUpperCase()
+          : "GV",
+      })),
     });
   } catch (error) {
     console.error("Schedule GET error:", error instanceof Error ? error.message : error);

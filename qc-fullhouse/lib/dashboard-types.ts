@@ -4,7 +4,6 @@ export type TeacherRecord = {
   key: string;
   name: string;
   initials: string;
-  subject: string;
   classes: number;
   score: number;
   trend: number;

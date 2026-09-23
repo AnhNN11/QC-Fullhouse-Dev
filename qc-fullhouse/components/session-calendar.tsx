@@ -90,7 +90,7 @@ export default function SessionCalendar() {
   return (
     <div className={styles.wrapper}>
       <div className={styles.heading}>
-        <div><Typography.Title level={2}>Lịch buổi học</Typography.Title><Typography.Text>Xem số lượng lớp theo ngày, ca học và giáo viên phụ trách.</Typography.Text></div>
+        <div><Typography.Title level={2}>Lịch buổi học</Typography.Title><Typography.Text>Chỉ hiển thị các buổi đã phân công giáo viên; xem theo ngày và ca học.</Typography.Text></div>
         <Segmented value={shift} onChange={(value) => setShift(value as Shift)} options={[{ label: "Tất cả", value: "all" }, { label: "Buổi sáng", value: "morning" }, { label: "Buổi chiều", value: "afternoon" }, { label: "Buổi tối", value: "evening" }]} />
       </div>
 

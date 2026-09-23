@@ -64,7 +64,7 @@ export async function GET(
     const search = request.nextUrl.searchParams.get("search")?.trim().slice(0, 100);
     const safeSearch = search ? escapeRegex(search) : "";
     const query = search
-      ? { $or: ["name", "code", "subject", "topic"].map((field) => ({ [field]: { $regex: safeSearch, $options: "i" } })) }
+      ? { $or: ["name", "code"].map((field) => ({ [field]: { $regex: safeSearch, $options: "i" } })) }
       : {};
     const items = await db.collection(resolved.config.collection)
       .find(query)
@@ -170,12 +170,9 @@ export async function DELETE(
     const db = await getDatabase();
     const dependencies = {
       teachers: [
-        { collection: "course_classes", field: "teacherId", label: "lớp học" },
         { collection: "contests", field: "teacherIds", label: "contest" },
+        { collection: "class_sessions", field: "teacherIds", label: "buổi học" },
       ],
-      courses: [{ collection: "course_classes", field: "courseId", label: "lớp học" }],
-      classes: [{ collection: "class_sessions", field: "classId", label: "buổi học" }],
-      sessions: [{ collection: "qc_evaluations", field: "sessionId", label: "phiếu đánh giá" }],
       contests: [],
     } as const;
     for (const dependency of dependencies[resolved.entity]) {

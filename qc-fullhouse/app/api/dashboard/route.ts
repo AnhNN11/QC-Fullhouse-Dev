@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { ObjectId } from "mongodb";
 import { getDatabase } from "@/lib/mongodb";
 
 export const dynamic = "force-dynamic";
@@ -7,27 +6,20 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const db = await getDatabase();
-    const [teachers, allClasses, reviewedSessions, pendingSessions] = await Promise.all([
+    const [teachers, allSessions, reviewedSessions, pendingSessions] = await Promise.all([
       db.collection("teachers").find(
         { managedBy: "qc-fullhouse", isPlaceholder: { $ne: true } },
         { projection: { managedBy: 0 } },
       ).sort({ order: 1 }).toArray(),
-      db.collection("course_classes").find({}, { projection: { teacherId: 1 } }).toArray(),
-      db.collection("class_sessions").countDocuments({ recordingStatus: "reviewed" }),
-      db.collection("class_sessions").find({ recordingStatus: { $in: ["ready", "issue"] } })
+      db.collection("class_sessions").find(
+        { sourceSystem: "fullhousedev" },
+        { projection: { teacherIds: 1 } },
+      ).toArray(),
+      db.collection("class_sessions").countDocuments({ sourceSystem: "fullhousedev", recordingStatus: "reviewed" }),
+      db.collection("class_sessions").find({ sourceSystem: "fullhousedev", recordingStatus: { $in: ["ready", "issue"] } })
         .sort({ date: -1, startTime: 1 }).limit(3).toArray(),
     ]);
 
-    const classIds = [...new Set(pendingSessions.map((item) => String(item.classId)).filter(ObjectId.isValid))];
-    const classes = await db.collection("course_classes").find({
-      _id: { $in: classIds.map((id) => new ObjectId(id)) },
-    }).toArray();
-    const teacherIds = [...new Set(classes.map((item) => String(item.teacherId)).filter(ObjectId.isValid))];
-    const relatedTeachers = await db.collection("teachers").find({
-      _id: { $in: teacherIds.map((id) => new ObjectId(id)) },
-    }).toArray();
-    const classMap = new Map(classes.map((item) => [item._id.toString(), item]));
-    const teacherMap = new Map(relatedTeachers.map((item) => [item._id.toString(), item]));
     const scores = teachers.map((item) => Number(item.score)).filter((score) => Number.isFinite(score) && score > 0);
     const averageScore = scores.length
       ? Math.round((scores.reduce((sum, score) => sum + score, 0) / scores.length) * 10) / 10
@@ -38,9 +30,9 @@ export async function GET() {
       evaluatedSessions: reviewedSessions,
       attentionNeeded: teachers.filter((item) => ["warning", "reviewing"].includes(String(item.status))).length,
     };
-    const classCounts = allClasses.reduce((counts, item) => {
-      const teacherId = String(item.teacherId ?? "");
-      counts.set(teacherId, (counts.get(teacherId) ?? 0) + 1);
+    const classCounts = allSessions.reduce((counts, item) => {
+      const teacherIds = Array.isArray(item.teacherIds) ? item.teacherIds.map(String) : [];
+      teacherIds.forEach((teacherId) => counts.set(teacherId, (counts.get(teacherId) ?? 0) + 1));
       return counts;
     }, new Map<string, number>());
     const dashboardTeachers = teachers.map(({ _id, ...teacher }) => ({
@@ -48,16 +40,14 @@ export async function GET() {
       classes: classCounts.get(_id.toString()) ?? 0,
     }));
     const pendingRecordings = pendingSessions.map((session, index) => {
-      const classItem = classMap.get(String(session.classId));
-      const teacher = classItem ? teacherMap.get(String(classItem.teacherId)) : undefined;
       const date = String(session.date ?? "");
       return {
         day: date.slice(8, 10),
         month: `THG ${Number(date.slice(5, 7)) || "—"}`,
-        title: `${classItem?.name ?? "Lớp không xác định"} · Buổi ${session.sessionNo ?? "—"}`,
-        teacher: teacher?.name ?? "Chưa phân công",
+        title: `${session.contestName ?? session.contestCode ?? "Contest chưa xác định"} · Buổi ${session.sessionNo ?? "—"}`,
+        teacher: Array.isArray(session.teacherNames) && session.teacherNames.length ? session.teacherNames.join(", ") : "Chưa phân công",
         time: `${session.startTime ?? "—"} – ${session.endTime ?? "—"}`,
-        room: classItem?.room ?? "—",
+        room: session.contestCode ?? "—",
         color: index === 0 ? "blue" : index === 1 ? "orange" : "purple",
         reviewStatus: session.recordingStatus === "issue" ? "Record có vấn đề" : "Chờ kiểm tra",
       };

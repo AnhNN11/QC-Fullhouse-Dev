@@ -1,13 +1,12 @@
 # Fullhouse QC
 
-Công cụ nội bộ dành cho QC Fullhouse quản lý và đánh giá chất lượng đội ngũ giáo viên. Ứng dụng sử dụng Next.js App Router, Ant Design và MongoDB Atlas. Ứng dụng không có tài khoản hoặc đăng nhập nội bộ; lớp truy cập có thể được bảo vệ bằng Cloudflare Zero Trust khi triển khai.
+Công cụ nội bộ dành cho QC Fullhouse quản lý giáo viên, contest và đánh giá từng buổi học được đồng bộ từ FullhouseDev. Ứng dụng sử dụng Next.js App Router, Ant Design và MongoDB Atlas.
 
 ## Chạy local
 
 ```bash
 npm install
 cp .env.example .env.local
-npm run seed
 npm run dev
 ```
 
@@ -18,41 +17,69 @@ Mở [http://localhost:3000](http://localhost:3000). Nếu cổng 3000 đang đ�
 ```env
 MONGODB_URI=mongodb+srv://<username>:<password>@<cluster>/<database>?retryWrites=true&w=majority
 MONGODB_DB=fullhouse_qc
+APP_LOGIN_USERNAME=qc-fullhouse
+APP_LOGIN_PASSWORD=change-this-password
+APP_SESSION_SECRET=generate-a-long-random-secret
+FULLHOUSE_SESSION_COOKIE=sessionid=<copy-from-browser-request>
+FULLHOUSE_CRAWL_CONCURRENCY=4
 ```
 
 Không commit `.env.local`. File này đã được loại trừ bởi `.gitignore`.
 
 ## API
 
-- `GET /api/dashboard`: đọc KPI, tiêu chí, lớp học và lịch giảng dạy từ MongoDB.
-- `POST /api/evaluations`: QC lưu phiếu đánh giá giáo viên.
+- `GET /api/dashboard`: đọc KPI giáo viên và các record cần QC.
+- `GET /api/qc-sessions`: danh sách buổi học đã crawl cùng trạng thái recording/QC.
+- `POST /api/evaluations`: lưu kết quả QC của một buổi học.
 - `/api/manage/teachers`: CRUD giáo viên.
 - `/api/manage/contests`: CRUD contest, phân công giáo viên và quản lý thời gian bắt đầu/kết thúc.
-- `/api/manage/courses`: CRUD khóa học.
-- `/api/manage/classes`: CRUD lớp học và phân công giáo viên.
-- `/api/manage/sessions`: CRUD các buổi học thuộc lớp.
-- `GET/POST /api/daily-reports`: tổng hợp và lưu Daily QC Report theo ngày.
 - `GET /api/schedule?month=YYYY-MM`: lịch tháng, số buổi học và giáo viên theo ngày.
 
-Các route `/api/manage/*` hỗ trợ `GET`, `POST`, `PUT` và `DELETE`. Contest bắt buộc gắn với một hoặc nhiều giáo viên, lưu thời gian bắt đầu/kết thúc và được giao diện tự động tính trạng thái cùng thời hạn còn lại. Lớp học lưu liên kết tới khóa học và giáo viên; buổi học lưu liên kết tới lớp học, đường dẫn record, trạng thái QC và nhận xét sau khi kiểm tra record.
+Các route `/api/manage/*` hỗ trợ `GET`, `POST`, `PUT` và `DELETE`. Contest bắt buộc gắn với một hoặc nhiều giáo viên, lưu thời gian bắt đầu/kết thúc và được giao diện tự động tính trạng thái cùng thời hạn còn lại.
 
-## Quy trình QC hằng ngày
+## Crawl buổi học trên máy local
 
-1. Mở **Buổi học & record**, gắn đường dẫn video cho từng buổi học.
-2. QC xem record, cập nhật trạng thái và nhập nhận xét.
-3. Mở **Daily QC Report**, chọn ngày cần tổng hợp.
-4. Kiểm tra số record đã xem, đang chờ hoặc có vấn đề.
-5. Lưu báo cáo vào MongoDB hoặc dùng **Sao chép để gửi sếp**.
+1. Đăng nhập `fullhousedev.com` trên trình duyệt.
+2. Mở **QC buổi học** → **Crawl buổi học**.
+3. Tải file `cookies.txt`/JSON export từ trình duyệt hoặc dán giá trị Cookie có `sessionid`.
+4. Bấm **Bắt đầu crawl**. Cookie chỉ được dùng trong lần chạy local và không được lưu vào MongoDB.
 
-Màn hình **Lịch buổi học** hiển thị số buổi ngay trên từng ngày, số ca tối, danh sách lớp chạy song song và giáo viên phụ trách. Có thể lọc nhanh theo buổi sáng, chiều hoặc tối.
+Ngoài ra có thể chạy bằng CLI bằng cách đặt `FULLHOUSE_SESSION_COOKIE` trong `.env.local` rồi chạy:
+
+```bash
+npm run crawl:sessions
+```
+
+Hoặc dùng trực tiếp file cookie export:
+
+```bash
+npm run crawl:sessions -- --cookie-file=/duong-dan/fullhousedev-cookies.json
+```
+
+Crawl riêng một contest:
+
+```bash
+npm run crawl:sessions -- --contest=pynhatanh1on1062026
+```
+
+Script đọc danh sách contest hiện có trong MongoDB, crawl các buổi học và recording, sau đó upsert vào `class_sessions`. Điểm và nhận xét QC đã lưu không bị ghi đè khi crawl lại. Cookie chỉ nằm trong `.env.local`, không được commit hoặc gửi lên client.
+
+## Quy trình QC
+
+1. Chạy `npm run crawl:sessions` trên máy local.
+2. Mở **QC buổi học** và lọc trạng thái **Chờ QC**.
+3. Mở recording của từng buổi, chấm điểm, chọn kết quả và ghi nhận xét.
+4. Dùng **Lịch buổi học** để xem số buổi và giáo viên theo ngày/ca.
+
+Màn hình **Lịch buổi học** hiển thị số buổi ngay trên từng ngày, số ca tối, các contest chạy song song và giáo viên phụ trách. Có thể lọc nhanh theo buổi sáng, chiều hoặc tối.
 
 Ví dụ payload cho API đánh giá:
 
 ```json
 {
-  "teacherId": "gv-001",
-  "classCode": "FH-EF1-0426",
+  "sessionId": "<mongo-object-id>",
   "score": 92,
+  "outcome": "reviewed",
   "note": "Buổi học đạt mục tiêu đề ra."
 }
 ```
@@ -67,4 +94,4 @@ npm start
 
 ## Triển khai
 
-Khi triển khai lên Vercel hoặc một nền tảng Node.js khác, cấu hình hai biến `MONGODB_URI` và `MONGODB_DB` trong phần Environment Variables. MongoDB Atlas Network Access cũng phải cho phép IP của nền tảng triển khai truy cập cluster.
+Hiện crawler được thiết kế để chạy local. Không đưa `FULLHOUSE_SESSION_COOKIE` lên Vercel. Khi triển khai ứng dụng, chỉ cấu hình các biến MongoDB và đăng nhập nội bộ của ứng dụng.
