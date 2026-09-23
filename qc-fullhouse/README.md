@@ -34,7 +34,7 @@ Không commit `.env.local`. File này đã được loại trừ bởi `.gitigno
 - `GET/POST /api/daily-reports`: tổng hợp và lưu Daily QC Report theo ngày.
 - `GET /api/schedule?month=YYYY-MM`: lịch tháng, số buổi học và giáo viên theo ngày.
 
-Các route `/api/manage/*` hỗ trợ `GET`, `POST`, `PUT` và `DELETE`. Contest bắt buộc gắn với một giáo viên, lưu thời gian bắt đầu/kết thúc và được giao diện tự động tính trạng thái cùng thời hạn còn lại. Lớp học lưu liên kết tới khóa học và giáo viên; buổi học lưu liên kết tới lớp học, đường dẫn record, trạng thái QC và nhận xét sau khi kiểm tra record.
+Các route `/api/manage/*` hỗ trợ `GET`, `POST`, `PUT` và `DELETE`. Contest bắt buộc gắn với một hoặc nhiều giáo viên, lưu thời gian bắt đầu/kết thúc và được giao diện tự động tính trạng thái cùng thời hạn còn lại. Lớp học lưu liên kết tới khóa học và giáo viên; buổi học lưu liên kết tới lớp học, đường dẫn record, trạng thái QC và nhận xét sau khi kiểm tra record.
 
 ## Quy trình QC hằng ngày
 

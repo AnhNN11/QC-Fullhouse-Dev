@@ -20,7 +20,7 @@ function validateRequired(
 ) {
   return required.filter((field) => {
     const value = payload[field];
-    return value === undefined || value === null || value === "";
+    return value === undefined || value === null || value === "" || (Array.isArray(value) && value.length === 0);
   });
 }
 
@@ -42,14 +42,14 @@ function validateContestTimes(payload: Record<string, unknown>) {
   return null;
 }
 
-async function contestTeacherExists(payload: Record<string, unknown>) {
-  const teacherId = String(payload.teacherId ?? "");
-  if (!ObjectId.isValid(teacherId)) return false;
+async function contestTeachersExist(payload: Record<string, unknown>) {
+  const teacherIds = Array.isArray(payload.teacherIds) ? payload.teacherIds.map(String) : [];
+  if (!teacherIds.length || teacherIds.some((id) => !ObjectId.isValid(id))) return false;
   const db = await getDatabase();
-  return Boolean(await db.collection("teachers").findOne(
-    { _id: new ObjectId(teacherId) },
-    { projection: { _id: 1 } },
-  ));
+  const count = await db.collection("teachers").countDocuments({
+    _id: { $in: teacherIds.map((id) => new ObjectId(id)) },
+  });
+  return count === new Set(teacherIds).size;
 }
 
 export async function GET(
@@ -102,7 +102,7 @@ export async function POST(
     if (resolved.entity === "contests") {
       const timeError = validateContestTimes(payload);
       if (timeError) return NextResponse.json({ error: timeError }, { status: 400 });
-      if (!await contestTeacherExists(payload)) return NextResponse.json({ error: "Giáo viên phụ trách không tồn tại." }, { status: 400 });
+      if (!await contestTeachersExist(payload)) return NextResponse.json({ error: "Danh sách giáo viên phụ trách không hợp lệ." }, { status: 400 });
     }
 
     const db = await getDatabase();
@@ -136,7 +136,7 @@ export async function PUT(
     if (resolved.entity === "contests") {
       const timeError = validateContestTimes(payload);
       if (timeError) return NextResponse.json({ error: timeError }, { status: 400 });
-      if (!await contestTeacherExists(payload)) return NextResponse.json({ error: "Giáo viên phụ trách không tồn tại." }, { status: 400 });
+      if (!await contestTeachersExist(payload)) return NextResponse.json({ error: "Danh sách giáo viên phụ trách không hợp lệ." }, { status: 400 });
     }
 
     const db = await getDatabase();
@@ -171,7 +171,7 @@ export async function DELETE(
     const dependencies = {
       teachers: [
         { collection: "course_classes", field: "teacherId", label: "lớp học" },
-        { collection: "contests", field: "teacherId", label: "contest" },
+        { collection: "contests", field: "teacherIds", label: "contest" },
       ],
       courses: [{ collection: "course_classes", field: "courseId", label: "lớp học" }],
       classes: [{ collection: "class_sessions", field: "classId", label: "buổi học" }],

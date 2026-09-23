@@ -40,6 +40,7 @@ type FieldDefinition = {
   placeholder?: string;
   min?: number;
   max?: number;
+  mode?: "multiple";
 };
 
 const entityMeta: Record<EntityName, { title: string; singular: string; description: string }> = {
@@ -195,7 +196,7 @@ export default function EntityCrud({ entity }: { entity: EntityName }) {
       { name: "code", label: "Mã lớp", required: true, placeholder: "FH-EF1-0426" },
       { name: "name", label: "Tên lớp", required: true },
       { name: "courseId", label: "Khóa học", required: true, type: "select", options: courses.map((item) => ({ value: item.id, label: `${item.code} · ${item.name}` })) },
-      { name: "teacherId", label: "Giáo viên phụ trách", required: true, type: "select", options: teachers.map((item) => ({ value: item.id, label: `${item.code ?? "GV"} · ${item.name}` })) },
+      { name: "teacherIds", label: "Giáo viên phụ trách", required: true, type: "select", mode: "multiple", options: teachers.map((item) => ({ value: item.id, label: `${item.code ?? "GV"} · ${item.name}` })) },
       { name: "startDate", label: "Ngày khai giảng", required: true, type: "date" },
       { name: "schedule", label: "Lịch học", required: true, placeholder: "Thứ 2, 4 · 18:00–19:30" },
       { name: "room", label: "Phòng học" },
@@ -265,7 +266,7 @@ export default function EntityCrud({ entity }: { entity: EntityName }) {
     ];
     if (entity === "contests") return [
       { title: "CONTEST", dataIndex: "name", key: "name", render: (value, record) => <div><strong>{String(value)}</strong><small>{String(record.code ?? "—")}</small></div> },
-      { title: "GIÁO VIÊN", dataIndex: "teacherId", key: "teacherId", width: 180, render: (value) => relationName(teachers, value) },
+      { title: "GIÁO VIÊN", dataIndex: "teacherIds", key: "teacherIds", width: 210, render: (value) => Array.isArray(value) ? value.map((id) => relationName(teachers, id)).join(", ") : "Chưa phân công" },
       { title: "BẮT ĐẦU", dataIndex: "startTime", key: "startTime", width: 150, render: formatDateTime },
       { title: "KẾT THÚC", dataIndex: "endTime", key: "endTime", width: 150, render: formatDateTime },
       { title: "THỜI HẠN CÒN LẠI", key: "remaining", width: 180, render: (_, record) => { const timing = contestTiming(record.startTime, record.endTime, now); return <div><Tag color={timing.color}>{timing.label}</Tag><small>{timing.remaining}</small></div>; } },
@@ -353,7 +354,7 @@ export default function EntityCrud({ entity }: { entity: EntityName }) {
       <Modal title={`${editing ? "Cập nhật" : "Thêm"} ${meta.singular}`} open={modalOpen} onCancel={() => setModalOpen(false)} onOk={() => form.submit()} okText={editing ? "Cập nhật" : "Tạo mới"} cancelText="Hủy" confirmLoading={saving} width={620} destroyOnHidden>
         <Form form={form} layout="vertical" onFinish={save} className={styles.form}>
           {fields.map((field) => <Form.Item key={field.name} name={field.name} label={field.label} rules={field.required ? [{ required: true, message: `Vui lòng nhập ${field.label.toLowerCase()}` }] : undefined}>
-            {field.type === "select" ? <Select showSearch optionFilterProp="label" placeholder={field.placeholder ?? `Chọn ${field.label.toLowerCase()}`} options={field.options} />
+            {field.type === "select" ? <Select mode={field.mode} showSearch optionFilterProp="label" placeholder={field.placeholder ?? `Chọn ${field.label.toLowerCase()}`} options={field.options} />
               : field.type === "number" ? <InputNumber min={field.min} max={field.max} style={{ width: "100%" }} />
               : field.type === "textarea" ? <Input.TextArea rows={3} maxLength={500} showCount />
               : <Input type={["date", "time", "datetime-local"].includes(field.type ?? "") ? field.type : "text"} placeholder={field.placeholder} />}

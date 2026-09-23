@@ -29,8 +29,8 @@ export const entityConfigs = {
   },
   contests: {
     collection: "contests",
-    required: ["code", "name", "teacherId", "startTime", "endTime"],
-    allowed: ["code", "name", "teacherId", "startTime", "endTime", "sourceUrl", "notes", "createdAt", "updatedAt"],
+    required: ["code", "name", "teacherIds", "startTime", "endTime"],
+    allowed: ["code", "name", "teacherIds", "startTime", "endTime", "sourceUrl", "sourceAuthors", "notes", "createdAt", "updatedAt"],
     defaults: {},
     sort: { endTime: 1, startTime: -1 },
   },
