@@ -40,6 +40,7 @@ import {
   SearchOutlined,
   StarFilled,
   TeamOutlined,
+  TrophyOutlined,
   UserOutlined,
 } from "@ant-design/icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -68,6 +69,7 @@ type EvaluationSessionOption = {
 const navItems: MenuProps["items"] = [
   { key: "overview", icon: <HomeOutlined />, label: "Tổng quan" },
   { key: "teachers", icon: <TeamOutlined />, label: "Quản lý giáo viên" },
+  { key: "contests", icon: <TrophyOutlined />, label: "Quản lý contest" },
   { key: "courses", icon: <ReadOutlined />, label: "Quản lý khóa học" },
   { key: "classes", icon: <AppstoreOutlined />, label: "Quản lý lớp học" },
   { key: "sessions", icon: <ClockCircleOutlined />, label: "Buổi học & record" },
@@ -279,8 +281,8 @@ function QualityDashboard() {
           <Content><SessionCalendar /></Content>
         ) : selectedMenu === "daily-report" ? (
           <Content><DailyReport /></Content>
-        ) : ["teachers", "courses", "classes", "sessions"].includes(selectedMenu) ? (
-          <Content><EntityCrud entity={selectedMenu as "teachers" | "courses" | "classes" | "sessions"} /></Content>
+        ) : ["teachers", "contests", "courses", "classes", "sessions"].includes(selectedMenu) ? (
+          <Content><EntityCrud entity={selectedMenu as "teachers" | "contests" | "courses" | "classes" | "sessions"} /></Content>
         ) : null}
       </Layout>
 

@@ -27,13 +27,14 @@ Không commit `.env.local`. File này đã được loại trừ bởi `.gitigno
 - `GET /api/dashboard`: đọc KPI, tiêu chí, lớp học và lịch giảng dạy từ MongoDB.
 - `POST /api/evaluations`: QC lưu phiếu đánh giá giáo viên.
 - `/api/manage/teachers`: CRUD giáo viên.
+- `/api/manage/contests`: CRUD contest, phân công giáo viên và quản lý thời gian bắt đầu/kết thúc.
 - `/api/manage/courses`: CRUD khóa học.
 - `/api/manage/classes`: CRUD lớp học và phân công giáo viên.
 - `/api/manage/sessions`: CRUD các buổi học thuộc lớp.
 - `GET/POST /api/daily-reports`: tổng hợp và lưu Daily QC Report theo ngày.
 - `GET /api/schedule?month=YYYY-MM`: lịch tháng, số buổi học và giáo viên theo ngày.
 
-Các route `/api/manage/*` hỗ trợ `GET`, `POST`, `PUT` và `DELETE`. Lớp học lưu liên kết tới khóa học và giáo viên; buổi học lưu liên kết tới lớp học, đường dẫn record, trạng thái QC và nhận xét sau khi kiểm tra record.
+Các route `/api/manage/*` hỗ trợ `GET`, `POST`, `PUT` và `DELETE`. Contest bắt buộc gắn với một giáo viên, lưu thời gian bắt đầu/kết thúc và được giao diện tự động tính trạng thái cùng thời hạn còn lại. Lớp học lưu liên kết tới khóa học và giáo viên; buổi học lưu liên kết tới lớp học, đường dẫn record, trạng thái QC và nhận xét sau khi kiểm tra record.
 
 ## Quy trình QC hằng ngày
 

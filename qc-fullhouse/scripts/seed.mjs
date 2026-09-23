@@ -110,6 +110,8 @@ try {
     db.collection("courses").createIndex({ code: 1 }, { unique: true }),
     db.collection("course_classes").createIndex({ code: 1 }, { unique: true }),
     db.collection("class_sessions").createIndex({ classId: 1, sessionNo: 1 }, { unique: true }),
+    db.collection("contests").createIndex({ code: 1 }, { unique: true }),
+    db.collection("contests").createIndex({ teacherId: 1, endTime: 1 }),
   ]);
 
   console.log("Đã kết nối MongoDB và khởi tạo dữ liệu Fullhouse QC thành công.");

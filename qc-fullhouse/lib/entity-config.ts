@@ -27,6 +27,13 @@ export const entityConfigs = {
     defaults: { recordingStatus: "pending_upload" },
     sort: { date: -1, sessionNo: 1 },
   },
+  contests: {
+    collection: "contests",
+    required: ["code", "name", "teacherId", "startTime", "endTime"],
+    allowed: ["code", "name", "teacherId", "startTime", "endTime", "sourceUrl", "notes", "createdAt", "updatedAt"],
+    defaults: {},
+    sort: { endTime: 1, startTime: -1 },
+  },
 } as const;
 
 export type EntityName = keyof typeof entityConfigs;

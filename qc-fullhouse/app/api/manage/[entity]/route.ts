@@ -34,6 +34,24 @@ async function getConfig(context: RouteContext<"/api/manage/[entity]">) {
   return { entity, config: entityConfigs[entity] };
 }
 
+function validateContestTimes(payload: Record<string, unknown>) {
+  const start = new Date(String(payload.startTime)).getTime();
+  const end = new Date(String(payload.endTime)).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return "Thời gian contest không hợp lệ.";
+  if (end <= start) return "Thời gian kết thúc phải sau thời gian bắt đầu.";
+  return null;
+}
+
+async function contestTeacherExists(payload: Record<string, unknown>) {
+  const teacherId = String(payload.teacherId ?? "");
+  if (!ObjectId.isValid(teacherId)) return false;
+  const db = await getDatabase();
+  return Boolean(await db.collection("teachers").findOne(
+    { _id: new ObjectId(teacherId) },
+    { projection: { _id: 1 } },
+  ));
+}
+
 export async function GET(
   request: NextRequest,
   context: RouteContext<"/api/manage/[entity]">,
@@ -81,6 +99,11 @@ export async function POST(
     if (missing.length) {
       return NextResponse.json({ error: `Thiếu trường bắt buộc: ${missing.join(", ")}` }, { status: 400 });
     }
+    if (resolved.entity === "contests") {
+      const timeError = validateContestTimes(payload);
+      if (timeError) return NextResponse.json({ error: timeError }, { status: 400 });
+      if (!await contestTeacherExists(payload)) return NextResponse.json({ error: "Giáo viên phụ trách không tồn tại." }, { status: 400 });
+    }
 
     const db = await getDatabase();
     const result = await db.collection(resolved.config.collection).insertOne(payload);
@@ -109,6 +132,11 @@ export async function PUT(
     const missing = validateRequired(payload, resolved.config.required);
     if (missing.length) {
       return NextResponse.json({ error: `Thiếu trường bắt buộc: ${missing.join(", ")}` }, { status: 400 });
+    }
+    if (resolved.entity === "contests") {
+      const timeError = validateContestTimes(payload);
+      if (timeError) return NextResponse.json({ error: timeError }, { status: 400 });
+      if (!await contestTeacherExists(payload)) return NextResponse.json({ error: "Giáo viên phụ trách không tồn tại." }, { status: 400 });
     }
 
     const db = await getDatabase();
@@ -141,18 +169,23 @@ export async function DELETE(
   try {
     const db = await getDatabase();
     const dependencies = {
-      teachers: { collection: "course_classes", field: "teacherId", label: "lớp học" },
-      courses: { collection: "course_classes", field: "courseId", label: "lớp học" },
-      classes: { collection: "class_sessions", field: "classId", label: "buổi học" },
-      sessions: { collection: "qc_evaluations", field: "sessionId", label: "phiếu đánh giá" },
+      teachers: [
+        { collection: "course_classes", field: "teacherId", label: "lớp học" },
+        { collection: "contests", field: "teacherId", label: "contest" },
+      ],
+      courses: [{ collection: "course_classes", field: "courseId", label: "lớp học" }],
+      classes: [{ collection: "class_sessions", field: "classId", label: "buổi học" }],
+      sessions: [{ collection: "qc_evaluations", field: "sessionId", label: "phiếu đánh giá" }],
+      contests: [],
     } as const;
-    const dependency = dependencies[resolved.entity];
-    const linkedCount = await db.collection(dependency.collection).countDocuments({ [dependency.field]: id });
-    if (linkedCount > 0) {
-      return NextResponse.json(
-        { error: `Không thể xóa vì dữ liệu đang được sử dụng bởi ${linkedCount} ${dependency.label}.` },
-        { status: 409 },
-      );
+    for (const dependency of dependencies[resolved.entity]) {
+      const linkedCount = await db.collection(dependency.collection).countDocuments({ [dependency.field]: id });
+      if (linkedCount > 0) {
+        return NextResponse.json(
+          { error: `Không thể xóa vì dữ liệu đang được sử dụng bởi ${linkedCount} ${dependency.label}.` },
+          { status: 409 },
+        );
+      }
     }
     const result = await db.collection(resolved.config.collection).deleteOne({ _id: new ObjectId(id) });
     if (!result.deletedCount) return NextResponse.json({ error: "Không tìm thấy dữ liệu." }, { status: 404 });
