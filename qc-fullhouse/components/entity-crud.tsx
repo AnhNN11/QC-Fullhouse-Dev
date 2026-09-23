@@ -171,9 +171,17 @@ export default function EntityCrud({ entity }: { entity: EntityName }) {
   }, [entity]);
 
   const relationName = useCallback((list: EntityRecord[], id: unknown) => {
-    const match = list.find((item) => item.id === id || item.key === id);
-    return String(match?.name ?? match?.code ?? id ?? "—");
+    if (id === undefined || id === null || id === "") return "—";
+    const normalizedId = String(id);
+    const match = list.find((item) => String(item.id ?? item.key ?? "") === normalizedId);
+    return String(match?.name ?? match?.code ?? "—");
   }, []);
+
+  const relationNames = useCallback((list: EntityRecord[], value: unknown, fallback = "—") => {
+    const ids = Array.isArray(value) ? value : value ? [value] : [];
+    const names = ids.map((id) => relationName(list, id)).filter((name) => name !== "—");
+    return names.length > 0 ? names.join(", ") : fallback;
+  }, [relationName]);
 
   const fields = useMemo<FieldDefinition[]>(() => {
     if (entity === "teachers") return [
@@ -196,7 +204,7 @@ export default function EntityCrud({ entity }: { entity: EntityName }) {
       { name: "code", label: "Mã lớp", required: true, placeholder: "FH-EF1-0426" },
       { name: "name", label: "Tên lớp", required: true },
       { name: "courseId", label: "Khóa học", required: true, type: "select", options: courses.map((item) => ({ value: item.id, label: `${item.code} · ${item.name}` })) },
-      { name: "teacherIds", label: "Giáo viên phụ trách", required: true, type: "select", mode: "multiple", options: teachers.map((item) => ({ value: item.id, label: `${item.code ?? "GV"} · ${item.name}` })) },
+      { name: "teacherId", label: "Giáo viên phụ trách", required: true, type: "select", options: teachers.map((item) => ({ value: item.id, label: `${item.code ?? "GV"} · ${item.name}` })) },
       { name: "startDate", label: "Ngày khai giảng", required: true, type: "date" },
       { name: "schedule", label: "Lịch học", required: true, placeholder: "Thứ 2, 4 · 18:00–19:30" },
       { name: "room", label: "Phòng học" },
@@ -206,7 +214,7 @@ export default function EntityCrud({ entity }: { entity: EntityName }) {
     if (entity === "contests") return [
       { name: "code", label: "Mã contest", required: true, placeholder: "cpp62" },
       { name: "name", label: "Tên contest", required: true, placeholder: "Lập trình C++ | Fullhouse Dev 62" },
-      { name: "teacherId", label: "Giáo viên phụ trách", required: true, type: "select", options: teachers.map((item) => ({ value: item.id, label: `${item.code ?? "GV"} · ${item.name}` })) },
+      { name: "teacherIds", label: "Giáo viên phụ trách", required: true, type: "select", mode: "multiple", options: teachers.map((item) => ({ value: item.id, label: `${item.code ?? "GV"} · ${item.name}` })) },
       { name: "startTime", label: "Bắt đầu", required: true, type: "datetime-local" },
       { name: "endTime", label: "Kết thúc", required: true, type: "datetime-local" },
       { name: "sourceUrl", label: "Đường dẫn contest", placeholder: "https://fullhousedev.com/contest/..." },
@@ -259,14 +267,14 @@ export default function EntityCrud({ entity }: { entity: EntityName }) {
     if (entity === "classes") return [
       { title: "MÃ LỚP", dataIndex: "code", key: "code", width: 120 },
       { title: "LỚP HỌC", dataIndex: "name", key: "name", render: (value, record) => <div><strong>{String(value)}</strong><small>{relationName(courses, record.courseId)}</small></div> },
-      { title: "GIÁO VIÊN", dataIndex: "teacherId", key: "teacherId", render: (value) => relationName(teachers, value) },
+      { title: "GIÁO VIÊN", key: "teacherId", render: (_, record) => relationNames(teachers, record.teacherIds ?? record.teacherId) },
       { title: "LỊCH HỌC", dataIndex: "schedule", key: "schedule" },
       { title: "HỌC VIÊN", dataIndex: "studentCount", key: "studentCount", align: "center" },
       statusColumn, actions,
     ];
     if (entity === "contests") return [
       { title: "CONTEST", dataIndex: "name", key: "name", render: (value, record) => <div><strong>{String(value)}</strong><small>{String(record.code ?? "—")}</small></div> },
-      { title: "GIÁO VIÊN", dataIndex: "teacherIds", key: "teacherIds", width: 210, render: (value) => Array.isArray(value) ? value.map((id) => relationName(teachers, id)).join(", ") : "Chưa phân công" },
+      { title: "GIÁO VIÊN", key: "teacherIds", width: 210, render: (_, record) => relationNames(teachers, record.teacherIds ?? record.teacherId, "Chưa phân công") },
       { title: "BẮT ĐẦU", dataIndex: "startTime", key: "startTime", width: 150, render: formatDateTime },
       { title: "KẾT THÚC", dataIndex: "endTime", key: "endTime", width: 150, render: formatDateTime },
       { title: "THỜI HẠN CÒN LẠI", key: "remaining", width: 180, render: (_, record) => { const timing = contestTiming(record.startTime, record.endTime, now); return <div><Tag color={timing.color}>{timing.label}</Tag><small>{timing.remaining}</small></div>; } },
@@ -285,7 +293,7 @@ export default function EntityCrud({ entity }: { entity: EntityName }) {
     ];
   // Functions are stable for the lifetime of this render configuration.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [classes, courses, entity, meta.singular, now, teachers]);
+  }, [classes, courses, entity, meta.singular, now, relationNames, teachers]);
 
   function openCreate() {
     setEditing(null);
