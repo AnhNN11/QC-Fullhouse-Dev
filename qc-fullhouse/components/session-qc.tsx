@@ -6,6 +6,7 @@ import {
   Button,
   Card,
   Col,
+  DatePicker,
   Form,
   Input,
   InputNumber,
@@ -32,6 +33,7 @@ import {
   UploadOutlined,
 } from "@ant-design/icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import dayjs from "dayjs";
 import styles from "./session-qc.module.css";
 
 type QcSession = {
@@ -61,6 +63,18 @@ const statusMeta = {
   reviewed: { label: "Đã QC", color: "green" },
   issue: { label: "Có vấn đề", color: "red" },
 } as const;
+
+function vietnamDate(offsetDays = 0) {
+  const shifted = new Date(Date.now() + offsetDays * 86_400_000);
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(shifted);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
 
 function isFullhouseDomain(value: unknown) {
   const domain = String(value ?? "").trim().replace(/^\./, "").toLowerCase();
@@ -102,9 +116,10 @@ export default function SessionQc() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("ready");
+  const [status, setStatus] = useState("all");
+  const [date, setDate] = useState(() => vietnamDate(-1));
   const [page, setPage] = useState(1);
-  const [pagination, setPagination] = useState<Pagination>({ page: 1, pageSize: 12, total: 0 });
+  const [pagination, setPagination] = useState<Pagination>({ page: 1, pageSize: 50, total: 0 });
   const [selected, setSelected] = useState<QcSession | null>(null);
   const [crawlOpen, setCrawlOpen] = useState(false);
   const [crawling, setCrawling] = useState(false);
@@ -117,20 +132,22 @@ export default function SessionQc() {
       const params = new URLSearchParams();
       if (search.trim()) params.set("search", search.trim());
       if (status !== "all") params.set("status", status);
+      params.set("date", date);
+      params.set("hasRecording", "true");
       params.set("page", String(page));
-      params.set("pageSize", "12");
+      params.set("pageSize", "50");
       const response = await fetch(`/api/qc-sessions?${params}`, { cache: "no-store" });
       const result = (await response.json()) as { items?: QcSession[]; stats?: Stats; pagination?: Pagination; error?: string };
       if (!response.ok) throw new Error(result.error ?? "Không thể tải buổi học");
       setItems(result.items ?? []);
       setStats(result.stats ?? { total: 0, waiting: 0, reviewed: 0, issues: 0 });
-      setPagination(result.pagination ?? { page, pageSize: 12, total: 0 });
+      setPagination(result.pagination ?? { page, pageSize: 50, total: 0 });
     } catch (error) {
       message.error(error instanceof Error ? error.message : "Không thể tải buổi học");
     } finally {
       setLoading(false);
     }
-  }, [message, page, search, status]);
+  }, [date, message, page, search, status]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void loadData(); }, 250);
@@ -163,6 +180,14 @@ export default function SessionQc() {
       render: (value: QcSession["recordingStatus"]) => <Tag color={statusMeta[value]?.color}>{statusMeta[value]?.label ?? value}</Tag>,
     },
     {
+      title: "NHẬN XÉT QC",
+      key: "qcNote",
+      width: 230,
+      render: (_, row) => row.qcScore !== undefined || row.qcNote
+        ? <div className={styles.qcComment}>{row.qcScore !== undefined && <Tag color="geekblue">{row.qcScore}/100</Tag>}<span>{row.qcNote || "Đã kiểm tra, chưa có ghi chú"}</span></div>
+        : <Typography.Text type="secondary">Chưa nhận xét</Typography.Text>,
+    },
+    {
       title: "",
       key: "action",
       width: 105,
@@ -173,7 +198,7 @@ export default function SessionQc() {
           setSelected(row);
           form.setFieldsValue({ score: row.qcScore ?? 90, outcome: row.recordingStatus === "issue" ? "issue" : "reviewed", note: row.qcNote ?? "" });
         }}
-      >QC buổi này</Button>,
+      >{row.recordingStatus === "ready" ? "QC ngay" : "Sửa QC"}</Button>,
     },
   ], [form]);
 
@@ -222,7 +247,7 @@ export default function SessionQc() {
   return (
     <div className={styles.wrapper}>
       <div className={styles.heading}>
-        <div><Typography.Title level={2}>QC buổi học</Typography.Title><Typography.Text>Các buổi học được crawl từ Fullhouse và giữ nguyên kết quả QC qua mỗi lần đồng bộ.</Typography.Text></div>
+        <div><Typography.Title level={2}>QC buổi học hằng ngày</Typography.Title><Typography.Text>Mặc định hiển thị toàn bộ record của ngày hôm qua để bạn xem và nhận xét lần lượt.</Typography.Text></div>
         <Space wrap>
           <Button icon={<ReloadOutlined />} onClick={loadData}>Làm mới</Button>
           <Button type="primary" icon={<CloudDownloadOutlined />} onClick={() => setCrawlOpen(true)}>Crawl buổi học</Button>
@@ -239,7 +264,7 @@ export default function SessionQc() {
       />
 
       <Row gutter={[14, 14]} className={styles.stats}>
-        <Col xs={12} lg={6}><Card><Statistic title="Tổng buổi đã crawl" value={stats.total} /></Card></Col>
+        <Col xs={12} lg={6}><Card><Statistic title={`Buổi có record · ${dayjs(date).format("DD/MM")}`} value={stats.total} /></Card></Col>
         <Col xs={12} lg={6}><Card><Statistic title="Chờ QC" value={stats.waiting} prefix={<ClockCircleOutlined />} styles={{ content: { color: "#2f6fed" } }} /></Card></Col>
         <Col xs={12} lg={6}><Card><Statistic title="Đã QC" value={stats.reviewed} prefix={<CheckCircleOutlined />} styles={{ content: { color: "#0d9e69" } }} /></Card></Col>
         <Col xs={12} lg={6}><Card><Statistic title="Có vấn đề" value={stats.issues} prefix={<ExclamationCircleOutlined />} styles={{ content: { color: "#d94f4f" } }} /></Card></Col>
@@ -247,13 +272,23 @@ export default function SessionQc() {
 
       <Card className={styles.card}>
         <div className={styles.toolbar}>
+          <DatePicker
+            allowClear={false}
+            value={dayjs(date)}
+            format="DD/MM/YYYY"
+            onChange={(value) => {
+              if (!value) return;
+              setDate(value.format("YYYY-MM-DD"));
+              setPage(1);
+            }}
+          />
+          <Button onClick={() => { setDate(vietnamDate(-1)); setPage(1); }}>Hôm qua</Button>
           <Input allowClear prefix={<SearchOutlined />} value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Tìm contest, giáo viên hoặc nội dung..." />
           <Select value={status} onChange={(value) => { setStatus(value); setPage(1); }} options={[
             { value: "all", label: "Tất cả trạng thái" },
             { value: "ready", label: "Chờ QC" },
             { value: "reviewed", label: "Đã QC" },
             { value: "issue", label: "Có vấn đề" },
-            { value: "pending_upload", label: "Chưa có record" },
           ]} />
         </div>
         <Table
@@ -269,7 +304,7 @@ export default function SessionQc() {
             showTotal: (total) => `${total} buổi`,
             onChange: setPage,
           }}
-          scroll={{ x: 1080 }}
+          scroll={{ x: 1320 }}
         />
       </Card>
 
@@ -284,7 +319,7 @@ export default function SessionQc() {
         destroyOnHidden
         forceRender
       >
-        {selected && <Space direction="vertical" className={styles.modalSummary} size={2}>
+        {selected && <Space orientation="vertical" className={styles.modalSummary} size={2}>
           <Typography.Text strong>{selected.contestName}</Typography.Text>
           <Typography.Text type="secondary">{selected.date} · {selected.startTime}–{selected.endTime} · {selected.teacherNames?.join(", ") || "Chưa phân công"}</Typography.Text>
           <Button type="link" icon={<PlayCircleOutlined />} href={selected.recordingUrl} target="_blank">Mở recording để kiểm tra</Button>

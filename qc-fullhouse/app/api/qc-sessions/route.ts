@@ -11,9 +11,18 @@ export async function GET(request: NextRequest) {
   try {
     const search = request.nextUrl.searchParams.get("search")?.trim().slice(0, 100) ?? "";
     const status = request.nextUrl.searchParams.get("status")?.trim() ?? "all";
+    const date = request.nextUrl.searchParams.get("date")?.trim() ?? "";
+    const hasRecording = request.nextUrl.searchParams.get("hasRecording") === "true";
     const page = Math.max(1, Number.parseInt(request.nextUrl.searchParams.get("page") ?? "1", 10) || 1);
     const pageSize = Math.min(50, Math.max(1, Number.parseInt(request.nextUrl.searchParams.get("pageSize") ?? "12", 10) || 12));
-    const query: Record<string, unknown> = { sourceSystem: "fullhousedev", sourceActive: { $ne: false } };
+    if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return NextResponse.json({ error: "Ngày phải có định dạng YYYY-MM-DD." }, { status: 400 });
+    }
+
+    const scopeQuery: Record<string, unknown> = { sourceSystem: "fullhousedev", sourceActive: { $ne: false } };
+    if (date) scopeQuery.date = date;
+    if (hasRecording) scopeQuery.recordingCount = { $gt: 0 };
+    const query: Record<string, unknown> = { ...scopeQuery };
 
     if (["pending_upload", "ready", "reviewed", "issue"].includes(status)) {
       query.recordingStatus = status;
@@ -26,6 +35,9 @@ export async function GET(request: NextRequest) {
     }
 
     const db = await getDatabase();
+    const sort = date
+      ? { startTime: 1, contestCode: 1, sessionNo: 1 }
+      : { qcPriority: 1, date: -1, startTime: 1, contestCode: 1 };
     const [items, filteredTotal, total, waiting, reviewed, issues] = await Promise.all([
       db.collection("class_sessions").aggregate([
         { $match: query },
@@ -41,7 +53,7 @@ export async function GET(request: NextRequest) {
             },
           },
         } },
-        { $sort: { qcPriority: 1, date: -1, startTime: 1, contestCode: 1 } },
+        { $sort: sort },
         { $skip: (page - 1) * pageSize },
         { $limit: pageSize },
         { $project: {
@@ -61,10 +73,10 @@ export async function GET(request: NextRequest) {
         } },
       ]).toArray(),
       db.collection("class_sessions").countDocuments(query),
-      db.collection("class_sessions").countDocuments({ sourceSystem: "fullhousedev", sourceActive: { $ne: false } }),
-      db.collection("class_sessions").countDocuments({ sourceSystem: "fullhousedev", sourceActive: { $ne: false }, recordingStatus: "ready" }),
-      db.collection("class_sessions").countDocuments({ sourceSystem: "fullhousedev", sourceActive: { $ne: false }, recordingStatus: "reviewed" }),
-      db.collection("class_sessions").countDocuments({ sourceSystem: "fullhousedev", sourceActive: { $ne: false }, recordingStatus: "issue" }),
+      db.collection("class_sessions").countDocuments(scopeQuery),
+      db.collection("class_sessions").countDocuments({ ...scopeQuery, recordingStatus: "ready" }),
+      db.collection("class_sessions").countDocuments({ ...scopeQuery, recordingStatus: "reviewed" }),
+      db.collection("class_sessions").countDocuments({ ...scopeQuery, recordingStatus: "issue" }),
     ]);
 
     return NextResponse.json({
