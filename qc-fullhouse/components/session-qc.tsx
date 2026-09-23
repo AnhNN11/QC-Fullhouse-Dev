@@ -53,6 +53,7 @@ type QcSession = {
 };
 
 type Stats = { total: number; waiting: number; reviewed: number; issues: number };
+type Pagination = { page: number; pageSize: number; total: number };
 
 const statusMeta = {
   pending_upload: { label: "Chưa có record", color: "default" },
@@ -61,6 +62,11 @@ const statusMeta = {
   issue: { label: "Có vấn đề", color: "red" },
 } as const;
 
+function isFullhouseDomain(value: unknown) {
+  const domain = String(value ?? "").trim().replace(/^\./, "").toLowerCase();
+  return domain === "fullhousedev.com" || domain.endsWith(".fullhousedev.com");
+}
+
 function cookiesFromFile(text: string) {
   const trimmed = text.trim();
   try {
@@ -68,7 +74,7 @@ function cookiesFromFile(text: string) {
     const rows = Array.isArray(parsed) ? parsed : parsed.cookies;
     if (Array.isArray(rows)) {
       const cookie = rows
-        .filter((item) => String(item.domain ?? "").includes("fullhousedev.com") && item.name)
+        .filter((item) => isFullhouseDomain(item.domain) && item.name)
         .map((item) => `${item.name}=${item.value ?? ""}`)
         .join("; ");
       if (cookie) return cookie;
@@ -80,7 +86,7 @@ function cookiesFromFile(text: string) {
   const netscapeCookie = trimmed.split(/\r?\n/)
     .filter((line) => line && !line.startsWith("#"))
     .map((line) => line.split("\t"))
-    .filter((parts) => parts.length >= 7 && parts[0].includes("fullhousedev.com"))
+    .filter((parts) => parts.length >= 7 && isFullhouseDomain(parts[0]))
     .map((parts) => `${parts[5]}=${parts[6]}`)
     .join("; ");
   if (netscapeCookie) return netscapeCookie;
@@ -96,7 +102,9 @@ export default function SessionQc() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("all");
+  const [status, setStatus] = useState("ready");
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState<Pagination>({ page: 1, pageSize: 12, total: 0 });
   const [selected, setSelected] = useState<QcSession | null>(null);
   const [crawlOpen, setCrawlOpen] = useState(false);
   const [crawling, setCrawling] = useState(false);
@@ -109,17 +117,20 @@ export default function SessionQc() {
       const params = new URLSearchParams();
       if (search.trim()) params.set("search", search.trim());
       if (status !== "all") params.set("status", status);
+      params.set("page", String(page));
+      params.set("pageSize", "12");
       const response = await fetch(`/api/qc-sessions?${params}`, { cache: "no-store" });
-      const result = (await response.json()) as { items?: QcSession[]; stats?: Stats; error?: string };
+      const result = (await response.json()) as { items?: QcSession[]; stats?: Stats; pagination?: Pagination; error?: string };
       if (!response.ok) throw new Error(result.error ?? "Không thể tải buổi học");
       setItems(result.items ?? []);
       setStats(result.stats ?? { total: 0, waiting: 0, reviewed: 0, issues: 0 });
+      setPagination(result.pagination ?? { page, pageSize: 12, total: 0 });
     } catch (error) {
       message.error(error instanceof Error ? error.message : "Không thể tải buổi học");
     } finally {
       setLoading(false);
     }
-  }, [message, search, status]);
+  }, [message, page, search, status]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void loadData(); }, 250);
@@ -223,7 +234,7 @@ export default function SessionQc() {
         type="info"
         showIcon
         icon={<CodeOutlined />}
-        message="Crawler chỉ hoạt động trên máy local"
+        title="Crawler chỉ hoạt động trên máy local"
         description="Bấm Crawl buổi học, tải file cookies.txt/JSON hoặc dán cookie của phiên đăng nhập Fullhouse. Cookie chỉ được dùng cho lần chạy này, không lưu vào MongoDB."
       />
 
@@ -236,8 +247,8 @@ export default function SessionQc() {
 
       <Card className={styles.card}>
         <div className={styles.toolbar}>
-          <Input allowClear prefix={<SearchOutlined />} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm contest, giáo viên hoặc nội dung..." />
-          <Select value={status} onChange={setStatus} options={[
+          <Input allowClear prefix={<SearchOutlined />} value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Tìm contest, giáo viên hoặc nội dung..." />
+          <Select value={status} onChange={(value) => { setStatus(value); setPage(1); }} options={[
             { value: "all", label: "Tất cả trạng thái" },
             { value: "ready", label: "Chờ QC" },
             { value: "reviewed", label: "Đã QC" },
@@ -245,7 +256,21 @@ export default function SessionQc() {
             { value: "pending_upload", label: "Chưa có record" },
           ]} />
         </div>
-        <Table rowKey="id" loading={loading} columns={columns} dataSource={items} pagination={{ pageSize: 12, showSizeChanger: false }} scroll={{ x: 1080 }} />
+        <Table
+          rowKey="id"
+          loading={loading}
+          columns={columns}
+          dataSource={items}
+          pagination={{
+            current: pagination.page,
+            pageSize: pagination.pageSize,
+            total: pagination.total,
+            showSizeChanger: false,
+            showTotal: (total) => `${total} buổi`,
+            onChange: setPage,
+          }}
+          scroll={{ x: 1080 }}
+        />
       </Card>
 
       <Modal
@@ -257,6 +282,7 @@ export default function SessionQc() {
         cancelText="Hủy"
         confirmLoading={saving}
         destroyOnHidden
+        forceRender
       >
         {selected && <Space direction="vertical" className={styles.modalSummary} size={2}>
           <Typography.Text strong>{selected.contestName}</Typography.Text>
@@ -266,7 +292,20 @@ export default function SessionQc() {
         <Form form={form} layout="vertical" onFinish={submitEvaluation}>
           <Form.Item name="score" label="Điểm QC" rules={[{ required: true, message: "Vui lòng nhập điểm" }]}><InputNumber min={0} max={100} style={{ width: "100%" }} suffix="/ 100" /></Form.Item>
           <Form.Item name="outcome" label="Kết quả" rules={[{ required: true }]}><Select options={[{ value: "reviewed", label: "Đạt / đã kiểm tra" }, { value: "issue", label: "Có vấn đề cần xử lý" }]} /></Form.Item>
-          <Form.Item name="note" label="Nhận xét QC"><Input.TextArea rows={5} maxLength={1000} showCount placeholder="Điểm làm tốt, vấn đề và đề xuất cải thiện..." /></Form.Item>
+          <Form.Item
+            name="note"
+            label="Nhận xét QC"
+            rules={[
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  if (getFieldValue("outcome") !== "issue" || String(value ?? "").trim()) return Promise.resolve();
+                  return Promise.reject(new Error("Vui lòng mô tả vấn đề cần xử lý"));
+                },
+              }),
+            ]}
+          >
+            <Input.TextArea rows={5} maxLength={1000} showCount placeholder="Điểm làm tốt, vấn đề và đề xuất cải thiện..." />
+          </Form.Item>
         </Form>
       </Modal>
 
@@ -280,13 +319,14 @@ export default function SessionQc() {
         confirmLoading={crawling}
         cancelButtonProps={{ disabled: crawling }}
         closable={!crawling}
-        maskClosable={!crawling}
+        mask={{ closable: !crawling }}
         destroyOnHidden
+        forceRender
       >
         <Alert
           type="warning"
           showIcon
-          message="Cookie là thông tin đăng nhập nhạy cảm"
+          title="Cookie là thông tin đăng nhập nhạy cảm"
           description="Chỉ nhập trên localhost. Hệ thống không lưu cookie sau khi crawler kết thúc."
           className={styles.modalAlert}
         />

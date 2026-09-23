@@ -23,6 +23,10 @@
 .collapseButton { display: flex; width: 100%; appearance: none; align-items: center; justify-content: center; gap: 10px; padding: 13px; border: 0; border-top: 1px solid #f0f2f5; background: none; color: #8c97a7; cursor: pointer; font: inherit; font-size: 12px; }
 .mainLayout { min-width: 0; background: #f4f6f9; transition: margin-left .2s; }
 .header { position: sticky; top: 0; z-index: 10; display: flex; height: 76px; align-items: center; justify-content: space-between; padding: 0 30px; border-bottom: 1px solid #e9edf2; background: rgba(255,255,255,.96) !important; line-height: normal !important; backdrop-filter: blur(12px); }
+.headerLeading,.mobileBrand { display: flex; align-items: center; gap: 10px; }
+.mobileMenuButton { display: none !important; }
+.mobileDrawer :global(.ant-drawer-body) { padding: 12px 8px; }
+.mobileDrawer .navMenu { padding: 0; }
 .headerTitle { color: #28374c; font-size: 15px; font-weight: 650; }
 .userMenu { display: flex; align-items: center; }
 .userMenu { gap: 9px; color: #7d8999; text-align: left; }
@@ -94,6 +98,7 @@
 @media (max-width: 991px) {
   .header { padding: 0 20px; }
   .content { padding-inline: 20px; }
+  .mobileMenuButton { display: inline-flex !important; align-items: center; justify-content: center; }
 }
 @media (max-width: 640px) {
   .sider { display: none; }

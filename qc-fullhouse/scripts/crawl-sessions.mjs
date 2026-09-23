@@ -14,6 +14,11 @@ const requestedContest = process.argv.find((value) => value.startsWith("--contes
 const skipRecordings = process.argv.includes("--skip-recordings");
 const concurrency = Math.max(1, Math.min(8, Number(process.env.FULLHOUSE_CRAWL_CONCURRENCY ?? 4)));
 
+function isFullhouseDomain(value) {
+  const domain = String(value ?? "").trim().replace(/^\./, "").toLowerCase();
+  return domain === "fullhousedev.com" || domain.endsWith(".fullhousedev.com");
+}
+
 function cookieFromFile(filePath) {
   const text = fs.readFileSync(filePath, "utf8").trim();
   try {
@@ -21,7 +26,7 @@ function cookieFromFile(filePath) {
     const rows = Array.isArray(parsed) ? parsed : parsed.cookies;
     if (Array.isArray(rows)) {
       const value = rows
-        .filter((item) => String(item.domain ?? "").includes("fullhousedev.com") && item.name)
+        .filter((item) => isFullhouseDomain(item.domain) && item.name)
         .map((item) => `${item.name}=${item.value ?? ""}`)
         .join("; ");
       if (value) return value;
@@ -32,7 +37,7 @@ function cookieFromFile(filePath) {
   const netscape = text.split(/\r?\n/)
     .filter((line) => line && !line.startsWith("#"))
     .map((line) => line.split("\t"))
-    .filter((parts) => parts.length >= 7 && parts[0].includes("fullhousedev.com"))
+    .filter((parts) => parts.length >= 7 && isFullhouseDomain(parts[0]))
     .map((parts) => `${parts[5]}=${parts[6]}`)
     .join("; ");
   if (netscape) return netscape;
@@ -88,7 +93,10 @@ function parseSessions(html, contest) {
     const startTime = edit.attr("data-start") ?? "";
     const endTime = edit.attr("data-end") ?? "";
     const rawTitle = (edit.attr("data-title") ?? link.find(".fhd-session-name").clone().children().remove().end().text()).replace(/\s+/g, " ").trim();
-    const topic = rawTitle.replace(new RegExp(`^Buổi\\s+${sessionNo}\\s*`, "i"), "").trim();
+    const topic = rawTitle
+      .replace(/^Bu\S*i\s+\d+\s*[:\-–—.]?\s*/iu, "")
+      .replace(/^[:\-–—.]\s*/, "")
+      .trim();
     if (!sourceSessionId || !Number.isFinite(sessionNo) || !date || !startTime || !endTime) return;
     sessions.push({
       sourceSessionId,
@@ -96,7 +104,7 @@ function parseSessions(html, contest) {
       date,
       startTime,
       endTime,
-      topic,
+      topic: topic || "Chưa có nội dung",
       sourceUrl: absoluteUrl(href),
       recordingUrl: `${absoluteUrl(href)}?tab=recordings`,
       contestName: className,
@@ -110,7 +118,7 @@ async function recordingInfo(session) {
   const html = await fetchHtml(session.recordingUrl);
   const $ = cheerio.load(html);
   const manifests = $(".fhd-xem-track[data-manifest]").map((_, element) => absoluteUrl($(element).attr("data-manifest"))).get();
-  return { recordingCount: manifests.length, recordingManifestUrls: manifests };
+  return { recordingCount: manifests.length };
 }
 
 async function mapLimit(items, limit, callback) {
@@ -174,7 +182,6 @@ try {
           }
         }
         const recordingCount = recording?.recordingCount ?? Number(existing?.recordingCount ?? 0);
-        const recordingManifestUrls = recording?.recordingManifestUrls ?? (Array.isArray(existing?.recordingManifestUrls) ? existing.recordingManifestUrls : []);
         const preservedStatus = ["reviewed", "issue"].includes(String(existing?.recordingStatus)) ? existing.recordingStatus : null;
         const recordingStatus = preservedStatus ?? (recordingCount > 0 ? "ready" : "pending_upload");
         await db.collection("class_sessions").updateOne(
@@ -197,18 +204,27 @@ try {
               sourceUrl: session.sourceUrl,
               recordingUrl: session.recordingUrl,
               recordingCount,
-              recordingManifestUrls,
               recordingStatus,
+              sourceActive: true,
               crawledAt: new Date(),
               updatedAt: new Date(),
             },
             $setOnInsert: { createdAt: new Date() },
+            $unset: { recordingManifestUrls: "" },
           },
           { upsert: true },
         );
         imported += 1;
         if (recordingCount > 0) withRecordings += 1;
       });
+      await db.collection("class_sessions").updateMany(
+        {
+          sourceSystem: "fullhousedev",
+          contestId: contest._id.toString(),
+          sourceSessionId: { $nin: sessions.map((session) => session.sourceSessionId) },
+        },
+        { $set: { sourceActive: false, updatedAt: new Date() } },
+      );
       console.log(`✓ ${code}: ${sessions.length} buổi`);
     } catch (error) {
       failed += 1;

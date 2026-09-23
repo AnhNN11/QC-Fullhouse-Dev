@@ -10,6 +10,8 @@ type CrawlPayload = {
   contestCode?: string;
 };
 
+let crawlRunning = false;
+
 function runCrawler(cookie: string, contestCode: string) {
   return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
     const script = path.join(process.cwd(), "scripts", "crawl-sessions.mjs");
@@ -44,6 +46,9 @@ export async function POST(request: Request) {
   if (process.env.NODE_ENV === "production") {
     return NextResponse.json({ error: "Crawler trên web chỉ được phép chạy ở môi trường local." }, { status: 403 });
   }
+  if (crawlRunning) {
+    return NextResponse.json({ error: "Một lượt crawl khác đang chạy. Vui lòng chờ hoàn tất." }, { status: 409 });
+  }
 
   try {
     const body = (await request.json()) as CrawlPayload;
@@ -56,11 +61,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Mã contest không hợp lệ." }, { status: 400 });
     }
 
+    crawlRunning = true;
     const result = await runCrawler(cookie, contestCode);
     const summary = result.stdout.trim().split("\n").filter(Boolean).at(-1) ?? "Đã crawl xong.";
-    return NextResponse.json({ message: summary, output: result.stdout.trim() });
+    return NextResponse.json({ message: summary });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Không thể chạy crawler.";
     return NextResponse.json({ error: message.slice(0, 2_000) }, { status: 500 });
+  } finally {
+    crawlRunning = false;
   }
 }

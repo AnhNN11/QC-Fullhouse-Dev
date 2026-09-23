@@ -25,7 +25,11 @@ function getClientPromise() {
   return global.mongoClientPromise;
 }
 
+export async function getMongoClient(): Promise<MongoClient> {
+  return getClientPromise();
+}
+
 export async function getDatabase(): Promise<Db> {
-  const client = await getClientPromise();
+  const client = await getMongoClient();
   return client.db(process.env.MONGODB_DB ?? "fullhouse_qc");
 }

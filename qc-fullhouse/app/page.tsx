@@ -7,6 +7,7 @@ import {
   Card,
   Col,
   ConfigProvider,
+  Drawer,
   Input,
   Layout,
   Menu,
@@ -28,6 +29,7 @@ import {
   HomeOutlined,
   InfoCircleOutlined,
   LogoutOutlined,
+  MenuOutlined,
   MenuFoldOutlined,
   ReadOutlined,
   RightOutlined,
@@ -71,6 +73,8 @@ function QualityDashboard() {
   const { message } = App.useApp();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
+  const [mobile, setMobile] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [selectedMenu, setSelectedMenu] = useState("overview");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
@@ -142,7 +146,18 @@ function QualityDashboard() {
 
   return (
     <Layout className={styles.appShell}>
-      <Sider width={246} collapsedWidth={80} collapsed={collapsed} breakpoint="lg" onBreakpoint={setCollapsed} className={styles.sider} theme="light">
+      <Sider
+        width={246}
+        collapsedWidth={mobile ? 0 : 80}
+        collapsed={mobile || collapsed}
+        breakpoint="lg"
+        onBreakpoint={(broken) => {
+          setMobile(broken);
+          if (!broken) setMobileMenuOpen(false);
+        }}
+        className={styles.sider}
+        theme="light"
+      >
         <div className={`${styles.brand} ${collapsed ? styles.brandCollapsed : ""}`}>
           <BrandMark />
           {!collapsed && <div className={styles.brandCopy}><strong>FULLHOUSE</strong><span>EDUCATION</span></div>}
@@ -160,9 +175,32 @@ function QualityDashboard() {
         </div>
       </Sider>
 
-      <Layout className={styles.mainLayout} style={{ marginLeft: collapsed ? 80 : 246 }}>
+      <Drawer
+        title={<div className={styles.mobileBrand}><BrandMark /><div className={styles.brandCopy}><strong>FULLHOUSE</strong><span>EDUCATION</span></div></div>}
+        placement="left"
+        size={280}
+        open={mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+        className={styles.mobileDrawer}
+      >
+        <Menu
+          mode="inline"
+          selectedKeys={[selectedMenu]}
+          items={navItems}
+          onClick={({ key }) => {
+            setSelectedMenu(key);
+            setMobileMenuOpen(false);
+          }}
+          className={styles.navMenu}
+        />
+      </Drawer>
+
+      <Layout className={styles.mainLayout} style={{ marginLeft: mobile ? 0 : collapsed ? 80 : 246 }}>
         <Header className={styles.header}>
-          <div className={styles.headerTitle}>Hệ thống quản lý chất lượng</div>
+          <div className={styles.headerLeading}>
+            <Button className={styles.mobileMenuButton} type="text" icon={<MenuOutlined />} aria-label="Mở menu" onClick={() => setMobileMenuOpen(true)} />
+            <div className={styles.headerTitle}>Hệ thống quản lý chất lượng</div>
+          </div>
           <div className={styles.userMenu}>
             <Avatar className={styles.headerAvatar}>QC</Avatar>
             <div className={styles.headerUserText}><strong>QC Fullhouse</strong><span>Quản lý chất lượng</span></div>

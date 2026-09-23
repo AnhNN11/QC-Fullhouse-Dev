@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
     const sessions = await db.collection("class_sessions")
       .find({
         sourceSystem: "fullhousedev",
+        sourceActive: { $ne: false },
         date: { $regex: `^${month}` },
         "teacherNames.0": { $exists: true },
         teacherNames: { $nin: ["Chưa phân công"] },

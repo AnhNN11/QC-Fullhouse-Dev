@@ -315,7 +315,7 @@ export default function EntityCrud({ entity }: { entity: EntityName }) {
         <Table rowKey="id" loading={loading} columns={columns} dataSource={filtered} scroll={{ x: 850 }} pagination={{ pageSize: 8, showSizeChanger: false }} />
       </Card>
 
-      <Modal title={`${editing ? "Cập nhật" : "Thêm"} ${meta.singular}`} open={modalOpen} onCancel={() => setModalOpen(false)} onOk={() => form.submit()} okText={editing ? "Cập nhật" : "Tạo mới"} cancelText="Hủy" confirmLoading={saving} width={620} destroyOnHidden>
+      <Modal title={`${editing ? "Cập nhật" : "Thêm"} ${meta.singular}`} open={modalOpen} onCancel={() => setModalOpen(false)} onOk={() => form.submit()} okText={editing ? "Cập nhật" : "Tạo mới"} cancelText="Hủy" confirmLoading={saving} width={620} destroyOnHidden forceRender>
         <Form form={form} layout="vertical" onFinish={save} className={styles.form}>
           {fields.map((field) => <Form.Item key={field.name} name={field.name} label={field.label} rules={field.required ? [{ required: true, message: `Vui lòng nhập ${field.label.toLowerCase()}` }] : undefined}>
             {field.type === "select" ? <Select mode={field.mode} showSearch optionFilterProp="label" placeholder={field.placeholder ?? `Chọn ${field.label.toLowerCase()}`} options={field.options} />

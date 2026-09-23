@@ -12,11 +12,11 @@ export async function GET() {
         { projection: { managedBy: 0 } },
       ).sort({ order: 1 }).toArray(),
       db.collection("class_sessions").find(
-        { sourceSystem: "fullhousedev" },
+        { sourceSystem: "fullhousedev", sourceActive: { $ne: false } },
         { projection: { teacherIds: 1 } },
       ).toArray(),
-      db.collection("class_sessions").countDocuments({ sourceSystem: "fullhousedev", recordingStatus: "reviewed" }),
-      db.collection("class_sessions").find({ sourceSystem: "fullhousedev", recordingStatus: { $in: ["ready", "issue"] } })
+      db.collection("class_sessions").countDocuments({ sourceSystem: "fullhousedev", sourceActive: { $ne: false }, recordingStatus: "reviewed" }),
+      db.collection("class_sessions").find({ sourceSystem: "fullhousedev", sourceActive: { $ne: false }, recordingStatus: { $in: ["ready", "issue"] } })
         .sort({ date: -1, startTime: 1 }).limit(3).toArray(),
     ]);
 
