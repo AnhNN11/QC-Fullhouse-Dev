@@ -17,6 +17,12 @@
 .qcComment { display: flex; align-items: flex-start; gap: 6px; }
 .qcComment :global(.ant-tag) { flex: 0 0 auto; margin: 0; }
 .qcComment span { display: -webkit-box; overflow: hidden; color: #4f5d71; font-size: 11px; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.pendingRow > td { background: #f6f9ff !important; }
+.pendingRow > td:first-child { box-shadow: inset 3px 0 #3b78ed; }
+.reviewedRow > td { background: #f6fcf9 !important; }
+.reviewedRow > td:first-child { box-shadow: inset 3px 0 #20a36a; }
+.issueRow > td { background: #fff8f7 !important; }
+.issueRow > td:first-child { box-shadow: inset 3px 0 #d94f4f; }
 .modalSummary { width: 100%; margin-bottom: 18px; padding: 12px; border-radius: 8px; background: #f7f9fc; }
 .modalSummary :global(.ant-btn) { align-self: flex-start; padding-inline: 0; }
 .modalAlert { margin-bottom: 18px; }

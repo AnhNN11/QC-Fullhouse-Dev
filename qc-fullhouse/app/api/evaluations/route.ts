@@ -24,7 +24,7 @@ export async function POST(request: Request) {
       );
     }
     if (note.length > 1000) return NextResponse.json({ error: "Nhận xét QC không được vượt quá 1.000 ký tự." }, { status: 400 });
-    if (outcome === "issue" && !note) return NextResponse.json({ error: "Cần nhập nhận xét khi đánh dấu buổi học có vấn đề." }, { status: 400 });
+    if (!note) return NextResponse.json({ error: "Cần nhập nhận xét cho buổi học này." }, { status: 400 });
 
     const client = await getMongoClient();
     const db = client.db(process.env.MONGODB_DB ?? "fullhouse_qc");

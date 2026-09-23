@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
 
     const db = await getDatabase();
     const sort = date
-      ? { startTime: 1, contestCode: 1, sessionNo: 1 }
+      ? { qcPriority: 1, startTime: 1, contestCode: 1, sessionNo: 1 }
       : { qcPriority: 1, date: -1, startTime: 1, contestCode: 1 };
     const [items, filteredTotal, total, waiting, reviewed, issues] = await Promise.all([
       db.collection("class_sessions").aggregate([
@@ -45,8 +45,8 @@ export async function GET(request: NextRequest) {
           qcPriority: {
             $switch: {
               branches: [
-                { case: { $eq: ["$recordingStatus", "issue"] }, then: 0 },
-                { case: { $eq: ["$recordingStatus", "ready"] }, then: 1 },
+                { case: { $eq: ["$recordingStatus", "ready"] }, then: 0 },
+                { case: { $eq: ["$recordingStatus", "issue"] }, then: 1 },
                 { case: { $eq: ["$recordingStatus", "reviewed"] }, then: 2 },
               ],
               default: 3,

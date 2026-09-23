@@ -59,9 +59,9 @@ type Pagination = { page: number; pageSize: number; total: number };
 
 const statusMeta = {
   pending_upload: { label: "Chưa có record", color: "default" },
-  ready: { label: "Chờ QC", color: "blue" },
-  reviewed: { label: "Đã QC", color: "green" },
-  issue: { label: "Có vấn đề", color: "red" },
+  ready: { label: "Chưa nhận xét", color: "blue" },
+  reviewed: { label: "Đã nhận xét", color: "green" },
+  issue: { label: "Đã nhận xét · Có vấn đề", color: "red" },
 } as const;
 
 function vietnamDate(offsetDays = 0) {
@@ -173,7 +173,7 @@ export default function SessionQc() {
         : <Typography.Text type="secondary">Chưa có</Typography.Text>,
     },
     {
-      title: "TRẠNG THÁI QC",
+      title: "TRẠNG THÁI NHẬN XÉT",
       dataIndex: "recordingStatus",
       key: "recordingStatus",
       width: 130,
@@ -198,7 +198,7 @@ export default function SessionQc() {
           setSelected(row);
           form.setFieldsValue({ score: row.qcScore ?? 90, outcome: row.recordingStatus === "issue" ? "issue" : "reviewed", note: row.qcNote ?? "" });
         }}
-      >{row.recordingStatus === "ready" ? "QC ngay" : "Sửa QC"}</Button>,
+      >{row.recordingStatus === "ready" ? "Nhận xét" : "Sửa nhận xét"}</Button>,
     },
   ], [form]);
 
@@ -247,7 +247,7 @@ export default function SessionQc() {
   return (
     <div className={styles.wrapper}>
       <div className={styles.heading}>
-        <div><Typography.Title level={2}>QC buổi học hằng ngày</Typography.Title><Typography.Text>Mặc định hiển thị toàn bộ record của ngày hôm qua để bạn xem và nhận xét lần lượt.</Typography.Text></div>
+        <div><Typography.Title level={2}>Nhận xét record hằng ngày</Typography.Title><Typography.Text>Xem ngay lớp nào chưa nhận xét và lớp nào đã hoàn thành trong ngày đã chọn.</Typography.Text></div>
         <Space wrap>
           <Button icon={<ReloadOutlined />} onClick={loadData}>Làm mới</Button>
           <Button type="primary" icon={<CloudDownloadOutlined />} onClick={() => setCrawlOpen(true)}>Crawl buổi học</Button>
@@ -264,9 +264,9 @@ export default function SessionQc() {
       />
 
       <Row gutter={[14, 14]} className={styles.stats}>
-        <Col xs={12} lg={6}><Card><Statistic title={`Buổi có record · ${dayjs(date).format("DD/MM")}`} value={stats.total} /></Card></Col>
-        <Col xs={12} lg={6}><Card><Statistic title="Chờ QC" value={stats.waiting} prefix={<ClockCircleOutlined />} styles={{ content: { color: "#2f6fed" } }} /></Card></Col>
-        <Col xs={12} lg={6}><Card><Statistic title="Đã QC" value={stats.reviewed} prefix={<CheckCircleOutlined />} styles={{ content: { color: "#0d9e69" } }} /></Card></Col>
+        <Col xs={12} lg={6}><Card><Statistic title={`Cần nhận xét · ${dayjs(date).format("DD/MM")}`} value={stats.total} /></Card></Col>
+        <Col xs={12} lg={6}><Card><Statistic title="Chưa nhận xét" value={stats.waiting} prefix={<ClockCircleOutlined />} styles={{ content: { color: "#2f6fed" } }} /></Card></Col>
+        <Col xs={12} lg={6}><Card><Statistic title="Đã nhận xét" value={stats.reviewed + stats.issues} suffix={`/ ${stats.total}`} prefix={<CheckCircleOutlined />} styles={{ content: { color: "#0d9e69" } }} /></Card></Col>
         <Col xs={12} lg={6}><Card><Statistic title="Có vấn đề" value={stats.issues} prefix={<ExclamationCircleOutlined />} styles={{ content: { color: "#d94f4f" } }} /></Card></Col>
       </Row>
 
@@ -286,9 +286,9 @@ export default function SessionQc() {
           <Input allowClear prefix={<SearchOutlined />} value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Tìm contest, giáo viên hoặc nội dung..." />
           <Select value={status} onChange={(value) => { setStatus(value); setPage(1); }} options={[
             { value: "all", label: "Tất cả trạng thái" },
-            { value: "ready", label: "Chờ QC" },
-            { value: "reviewed", label: "Đã QC" },
-            { value: "issue", label: "Có vấn đề" },
+            { value: "ready", label: "Chưa nhận xét" },
+            { value: "reviewed", label: "Đã nhận xét" },
+            { value: "issue", label: "Đã nhận xét · Có vấn đề" },
           ]} />
         </div>
         <Table
@@ -296,6 +296,7 @@ export default function SessionQc() {
           loading={loading}
           columns={columns}
           dataSource={items}
+          rowClassName={(row) => row.recordingStatus === "ready" ? styles.pendingRow : row.recordingStatus === "issue" ? styles.issueRow : styles.reviewedRow}
           pagination={{
             current: pagination.page,
             pageSize: pagination.pageSize,
@@ -309,11 +310,11 @@ export default function SessionQc() {
       </Card>
 
       <Modal
-        title={selected ? `QC ${selected.contestCode} · Buổi ${selected.sessionNo}` : "QC buổi học"}
+        title={selected ? `Nhận xét ${selected.contestCode} · Buổi ${selected.sessionNo}` : "Nhận xét buổi học"}
         open={Boolean(selected)}
         onCancel={() => setSelected(null)}
         onOk={() => form.submit()}
-        okText="Lưu đánh giá"
+        okText="Lưu nhận xét"
         cancelText="Hủy"
         confirmLoading={saving}
         destroyOnHidden
@@ -330,14 +331,7 @@ export default function SessionQc() {
           <Form.Item
             name="note"
             label="Nhận xét QC"
-            rules={[
-              ({ getFieldValue }) => ({
-                validator(_, value) {
-                  if (getFieldValue("outcome") !== "issue" || String(value ?? "").trim()) return Promise.resolve();
-                  return Promise.reject(new Error("Vui lòng mô tả vấn đề cần xử lý"));
-                },
-              }),
-            ]}
+            rules={[{ required: true, whitespace: true, message: "Vui lòng nhập nhận xét cho buổi học" }]}
           >
             <Input.TextArea rows={5} maxLength={1000} showCount placeholder="Điểm làm tốt, vấn đề và đề xuất cải thiện..." />
           </Form.Item>
