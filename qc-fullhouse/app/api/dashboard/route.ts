@@ -9,7 +9,7 @@ export async function GET() {
     const db = await getDatabase();
     const [teachers, allClasses, reviewedSessions, pendingSessions] = await Promise.all([
       db.collection("teachers").find(
-        { managedBy: "qc-fullhouse" },
+        { managedBy: "qc-fullhouse", isPlaceholder: { $ne: true } },
         { projection: { managedBy: 0 } },
       ).sort({ order: 1 }).toArray(),
       db.collection("course_classes").find({}, { projection: { teacherId: 1 } }).toArray(),

@@ -65,6 +65,7 @@ export async function POST(request: Request) {
             trend: 0,
             status: "reviewing",
             managedBy: "qc-fullhouse",
+            isPlaceholder: true,
             order: 999,
             createdAt: new Date(),
             updatedAt: new Date(),
