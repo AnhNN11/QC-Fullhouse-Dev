@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 type CrawlPayload = {
   cookie?: string;
@@ -43,9 +44,6 @@ function runCrawler(cookie: string, contestCode: string) {
 }
 
 export async function POST(request: Request) {
-  if (process.env.NODE_ENV === "production") {
-    return NextResponse.json({ error: "Crawler trên web chỉ được phép chạy ở môi trường local." }, { status: 403 });
-  }
   if (crawlRunning) {
     return NextResponse.json({ error: "Một lượt crawl khác đang chạy. Vui lòng chờ hoàn tất." }, { status: 409 });
   }

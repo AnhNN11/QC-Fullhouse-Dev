@@ -37,12 +37,12 @@ Không commit `.env.local`. File này đã được loại trừ bởi `.gitigno
 
 Các route `/api/manage/*` hỗ trợ `GET`, `POST`, `PUT` và `DELETE`. Contest bắt buộc gắn với một hoặc nhiều giáo viên, lưu thời gian bắt đầu/kết thúc và được giao diện tự động tính trạng thái cùng thời hạn còn lại.
 
-## Crawl buổi học trên máy local
+## Crawl buổi học trên web
 
 1. Đăng nhập `fullhousedev.com` trên trình duyệt.
 2. Mở **QC buổi học** → **Crawl buổi học**.
 3. Tải file `cookies.txt`/JSON export từ trình duyệt hoặc dán giá trị Cookie có `sessionid`.
-4. Bấm **Bắt đầu crawl**. Cookie chỉ được dùng trong lần chạy local và không được lưu vào MongoDB.
+4. Bấm **Bắt đầu crawl**. Cookie chỉ được dùng trong lần chạy hiện tại và không được lưu vào MongoDB.
 
 Ngoài ra có thể chạy bằng CLI bằng cách đặt `FULLHOUSE_SESSION_COOKIE` trong `.env.local` rồi chạy:
 
@@ -94,4 +94,4 @@ npm start
 
 ## Triển khai
 
-Hiện crawler được thiết kế để chạy local. Không đưa `FULLHOUSE_SESSION_COOKIE` lên Vercel. Khi triển khai ứng dụng, chỉ cấu hình các biến MongoDB và đăng nhập nội bộ của ứng dụng.
+Crawler có thể chạy từ giao diện web trên Node.js runtime. Không đưa `FULLHOUSE_SESSION_COOKIE` lên Vercel; người dùng tải file cookie hoặc dán cookie cho từng lượt chạy. Khi triển khai ứng dụng, cấu hình các biến MongoDB và đăng nhập nội bộ của ứng dụng. Route crawler khai báo thời gian chạy tối đa 300 giây, nhưng giới hạn thực tế vẫn phụ thuộc gói của nền tảng triển khai.

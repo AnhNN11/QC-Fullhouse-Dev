@@ -223,7 +223,7 @@ export default function SessionQc() {
     }
   }
 
-  async function runLocalCrawl(values: { cookie: string; contestCode?: string }) {
+  async function runWebCrawl(values: { cookie: string; contestCode?: string }) {
     setCrawling(true);
     try {
       const response = await fetch("/api/local-crawl", {
@@ -259,8 +259,8 @@ export default function SessionQc() {
         type="info"
         showIcon
         icon={<CodeOutlined />}
-        title="Crawler chỉ hoạt động trên máy local"
-        description="Bấm Crawl buổi học, tải file cookies.txt/JSON hoặc dán cookie của phiên đăng nhập Fullhouse. Cookie chỉ được dùng cho lần chạy này, không lưu vào MongoDB."
+        title="Crawler chạy trực tiếp trên web"
+        description="Bấm Crawl buổi học, tải file cookies.txt/JSON hoặc dán cookie của phiên đăng nhập Fullhouse. Cookie chỉ được dùng trong lần chạy này và không lưu vào MongoDB."
       />
 
       <Row gutter={[14, 14]} className={styles.stats}>
@@ -356,10 +356,10 @@ export default function SessionQc() {
           type="warning"
           showIcon
           title="Cookie là thông tin đăng nhập nhạy cảm"
-          description="Chỉ nhập trên localhost. Hệ thống không lưu cookie sau khi crawler kết thúc."
+          description="Chỉ sử dụng trên hệ thống QC nội bộ. Cookie được gửi đến máy chủ để chạy crawler và không được lưu sau khi kết thúc."
           className={styles.modalAlert}
         />
-        <Form form={crawlForm} layout="vertical" onFinish={runLocalCrawl} preserve={false}>
+        <Form form={crawlForm} layout="vertical" onFinish={runWebCrawl} preserve={false}>
           <Form.Item label="Tải file cookie">
             <Upload
               accept=".txt,.json"
