@@ -117,8 +117,14 @@ async function recordingInfo(session) {
   if (skipRecordings) return null;
   const html = await fetchHtml(session.recordingUrl);
   const $ = cheerio.load(html);
-  const manifests = $(".fhd-xem-track[data-manifest]").map((_, element) => absoluteUrl($(element).attr("data-manifest"))).get();
-  return { recordingCount: manifests.length };
+  const manifests = [...new Set(
+    $(".fhd-xem-track[data-manifest]")
+      .map((_, element) => $(element).attr("data-manifest"))
+      .get()
+      .filter(Boolean)
+      .map(absoluteUrl),
+  )];
+  return { recordingCount: manifests.length, recordingManifestUrls: manifests };
 }
 
 async function mapLimit(items, limit, callback) {
@@ -182,6 +188,8 @@ try {
           }
         }
         const recordingCount = recording?.recordingCount ?? Number(existing?.recordingCount ?? 0);
+        const recordingManifestUrls = recording?.recordingManifestUrls
+          ?? (Array.isArray(existing?.recordingManifestUrls) ? existing.recordingManifestUrls : []);
         const preservedStatus = ["reviewed", "issue"].includes(String(existing?.recordingStatus)) ? existing.recordingStatus : null;
         const recordingStatus = preservedStatus ?? (recordingCount > 0 ? "ready" : "pending_upload");
         await db.collection("class_sessions").updateOne(
@@ -204,13 +212,13 @@ try {
               sourceUrl: session.sourceUrl,
               recordingUrl: session.recordingUrl,
               recordingCount,
+              recordingManifestUrls,
               recordingStatus,
               sourceActive: true,
               crawledAt: new Date(),
               updatedAt: new Date(),
             },
             $setOnInsert: { createdAt: new Date() },
-            $unset: { recordingManifestUrls: "" },
           },
           { upsert: true },
         );

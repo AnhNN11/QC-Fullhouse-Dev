@@ -66,6 +66,7 @@ export async function GET(request: NextRequest) {
           endTime: 1,
           topic: 1,
           recordingUrl: 1,
+          recordingManifestUrls: 1,
           recordingCount: 1,
           recordingStatus: 1,
           qcScore: 1,

@@ -62,7 +62,7 @@ Crawl riêng một contest:
 npm run crawl:sessions -- --contest=pynhatanh1on1062026
 ```
 
-Script đọc danh sách contest hiện có trong MongoDB, crawl các buổi học và recording, sau đó upsert vào `class_sessions`. Điểm và nhận xét QC đã lưu không bị ghi đè khi crawl lại. Cookie chỉ nằm trong `.env.local`, không được commit hoặc gửi lên client.
+Script đọc danh sách contest hiện có trong MongoDB, crawl các buổi học và recording, sau đó upsert vào `class_sessions`. Danh sách link manifest trực tiếp được lưu ở `recordingManifestUrls` để có thể sao chép từ màn hình QC sang công cụ phân tích. Điểm và nhận xét QC đã lưu không bị ghi đè khi crawl lại. Cookie chỉ nằm trong `.env.local`, không được commit hoặc gửi lên client.
 
 ## Quy trình QC
 

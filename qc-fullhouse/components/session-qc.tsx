@@ -25,6 +25,7 @@ import {
   CheckCircleOutlined,
   ClockCircleOutlined,
   CodeOutlined,
+  CopyOutlined,
   CloudDownloadOutlined,
   ExclamationCircleOutlined,
   PlayCircleOutlined,
@@ -48,6 +49,7 @@ type QcSession = {
   topic: string;
   sourceUrl: string;
   recordingUrl?: string;
+  recordingManifestUrls?: string[];
   recordingCount: number;
   recordingStatus: "pending_upload" | "ready" | "reviewed" | "issue";
   qcScore?: number;
@@ -126,6 +128,20 @@ export default function SessionQc() {
   const [form] = Form.useForm();
   const [crawlForm] = Form.useForm();
 
+  const copyRecordingLinks = useCallback(async (row: QcSession) => {
+    const links = row.recordingManifestUrls?.filter(Boolean) ?? [];
+    if (!links.length) {
+      message.warning("Chưa có link trực tiếp. Hãy crawl lại buổi học này.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(links.join("\n"));
+      message.success(`Đã sao chép ${links.length} link record`);
+    } catch {
+      message.error("Trình duyệt không cho phép sao chép link tự động.");
+    }
+  }, [message]);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
@@ -167,9 +183,12 @@ export default function SessionQc() {
     {
       title: "RECORD",
       key: "recording",
-      width: 115,
+      width: 180,
       render: (_, row) => row.recordingCount > 0
-        ? <Button type="link" size="small" icon={<PlayCircleOutlined />} href={row.recordingUrl} target="_blank">Xem ({row.recordingCount})</Button>
+        ? <Space size={2} orientation="vertical" align="start">
+          <Button type="link" size="small" icon={<PlayCircleOutlined />} href={row.recordingUrl} target="_blank" rel="noopener noreferrer">Xem ({row.recordingCount})</Button>
+          <Button type="link" size="small" icon={<CopyOutlined />} onClick={() => void copyRecordingLinks(row)}>Sao chép link</Button>
+        </Space>
         : <Typography.Text type="secondary">Chưa có</Typography.Text>,
     },
     {
@@ -200,7 +219,7 @@ export default function SessionQc() {
         }}
       >{row.recordingStatus === "ready" ? "Nhận xét" : "Sửa nhận xét"}</Button>,
     },
-  ], [form]);
+  ], [copyRecordingLinks, form]);
 
   async function submitEvaluation(values: { score: number; outcome: "reviewed" | "issue"; note?: string }) {
     if (!selected) return;
@@ -260,7 +279,7 @@ export default function SessionQc() {
         showIcon
         icon={<CodeOutlined />}
         title="Crawler chạy trực tiếp trên web"
-        description="Bấm Crawl buổi học, tải file cookies.txt/JSON hoặc dán cookie của phiên đăng nhập Fullhouse. Cookie chỉ được dùng trong lần chạy này và không lưu vào MongoDB."
+        description="Crawler lưu cả link record trực tiếp. Sau khi crawl, bấm Sao chép link ở từng buổi để đưa sang công cụ phân tích. Link có thể hết hạn; hãy crawl lại để làm mới."
       />
 
       <Row gutter={[14, 14]} className={styles.stats}>
