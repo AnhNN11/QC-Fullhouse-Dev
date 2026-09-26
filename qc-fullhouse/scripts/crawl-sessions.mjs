@@ -78,6 +78,35 @@ async function fetchHtml(url) {
   return html;
 }
 
+async function fetchJson(url) {
+  const response = await fetch(url, {
+    headers: {
+      Cookie: cookie,
+      "User-Agent": "Fullhouse-QC-Local-Crawler/1.0",
+      Accept: "application/json",
+    },
+    redirect: "follow",
+  });
+  if (!response.ok) throw new Error(`${response.status} khi tải ${url}`);
+  return response.json();
+}
+
+function mediaUrlsFromManifest(manifest, manifestUrl) {
+  const urls = [];
+  for (const track of Array.isArray(manifest?.tracks) ? manifest.tracks : []) {
+    for (const segment of Array.isArray(track?.segments) ? track.segments : []) {
+      if (!segment?.url) continue;
+      try {
+        const url = new URL(segment.url, manifestUrl);
+        if (["http:", "https:"].includes(url.protocol)) urls.push(url.toString());
+      } catch {
+        // Ignore malformed media URLs from the source manifest.
+      }
+    }
+  }
+  return urls;
+}
+
 function parseSessions(html, contest) {
   const $ = cheerio.load(html);
   const className = $(".page-title h2").first().text().replace(/\s+/g, " ").trim() || contest.name;
@@ -124,7 +153,19 @@ async function recordingInfo(session) {
       .filter(Boolean)
       .map(absoluteUrl),
   )];
-  return { recordingCount: manifests.length, recordingManifestUrls: manifests };
+  const mediaByManifest = await mapLimit(manifests, concurrency, async (manifestUrl) => {
+    try {
+      return mediaUrlsFromManifest(await fetchJson(manifestUrl), manifestUrl);
+    } catch (error) {
+      console.warn(`  ! Không đọc được file media từ ${manifestUrl}: ${error.message}`);
+      return [];
+    }
+  });
+  return {
+    recordingCount: manifests.length,
+    recordingManifestUrls: manifests,
+    recordingMediaUrls: [...new Set(mediaByManifest.flat())],
+  };
 }
 
 async function mapLimit(items, limit, callback) {
@@ -190,6 +231,8 @@ try {
         const recordingCount = recording?.recordingCount ?? Number(existing?.recordingCount ?? 0);
         const recordingManifestUrls = recording?.recordingManifestUrls
           ?? (Array.isArray(existing?.recordingManifestUrls) ? existing.recordingManifestUrls : []);
+        const recordingMediaUrls = recording?.recordingMediaUrls
+          ?? (Array.isArray(existing?.recordingMediaUrls) ? existing.recordingMediaUrls : []);
         const preservedStatus = ["reviewed", "issue"].includes(String(existing?.recordingStatus)) ? existing.recordingStatus : null;
         const recordingStatus = preservedStatus ?? (recordingCount > 0 ? "ready" : "pending_upload");
         await db.collection("class_sessions").updateOne(
@@ -213,6 +256,7 @@ try {
               recordingUrl: session.recordingUrl,
               recordingCount,
               recordingManifestUrls,
+              recordingMediaUrls,
               recordingStatus,
               sourceActive: true,
               crawledAt: new Date(),

@@ -50,6 +50,7 @@ type QcSession = {
   sourceUrl: string;
   recordingUrl?: string;
   recordingManifestUrls?: string[];
+  recordingMediaUrls?: string[];
   recordingCount: number;
   recordingStatus: "pending_upload" | "ready" | "reviewed" | "issue";
   qcScore?: number;
@@ -129,14 +130,15 @@ export default function SessionQc() {
   const [crawlForm] = Form.useForm();
 
   const copyRecordingLinks = useCallback(async (row: QcSession) => {
-    const links = row.recordingManifestUrls?.filter(Boolean) ?? [];
+    const mediaLinks = row.recordingMediaUrls?.filter(Boolean) ?? [];
+    const links = mediaLinks.length ? mediaLinks : (row.recordingManifestUrls?.filter(Boolean) ?? []);
     if (!links.length) {
       message.warning("Chưa có link trực tiếp. Hãy crawl lại buổi học này.");
       return;
     }
     try {
       await navigator.clipboard.writeText(links.join("\n"));
-      message.success(`Đã sao chép ${links.length} link record`);
+      message.success(`Đã sao chép ${links.length} link file record`);
     } catch {
       message.error("Trình duyệt không cho phép sao chép link tự động.");
     }
@@ -187,7 +189,7 @@ export default function SessionQc() {
       render: (_, row) => row.recordingCount > 0
         ? <Space size={2} orientation="vertical" align="start">
           <Button type="link" size="small" icon={<PlayCircleOutlined />} href={row.recordingUrl} target="_blank" rel="noopener noreferrer">Xem ({row.recordingCount})</Button>
-          <Button type="link" size="small" icon={<CopyOutlined />} onClick={() => void copyRecordingLinks(row)}>Sao chép link</Button>
+          <Button type="link" size="small" icon={<CopyOutlined />} onClick={() => void copyRecordingLinks(row)}>Sao chép link file</Button>
         </Space>
         : <Typography.Text type="secondary">Chưa có</Typography.Text>,
     },
@@ -279,7 +281,7 @@ export default function SessionQc() {
         showIcon
         icon={<CodeOutlined />}
         title="Crawler chạy trực tiếp trên web"
-        description="Crawler lưu cả link record trực tiếp. Sau khi crawl, bấm Sao chép link ở từng buổi để đưa sang công cụ phân tích. Link có thể hết hạn; hãy crawl lại để làm mới."
+        description="Crawler lấy link file .webm/.ogg công khai. Sau khi crawl, bấm Sao chép link file ở từng buổi để đưa sang công cụ phân tích hoặc tải về."
       />
 
       <Row gutter={[14, 14]} className={styles.stats}>
