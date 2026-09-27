@@ -2,6 +2,7 @@ import nextEnv from "@next/env";
 import * as cheerio from "cheerio";
 import fs from "node:fs";
 import { MongoClient, ObjectId, ServerApiVersion } from "mongodb";
+import { buildNotebookAudio } from "./lib/recording-audio.mjs";
 
 const { loadEnvConfig } = nextEnv;
 loadEnvConfig(process.cwd());
@@ -11,8 +12,14 @@ const uri = process.env.MONGODB_URI;
 const databaseName = process.env.MONGODB_DB ?? "fullhouse_qc";
 const cookieFile = process.argv.find((value) => value.startsWith("--cookie-file="))?.slice("--cookie-file=".length).trim();
 const requestedContest = process.argv.find((value) => value.startsWith("--contest="))?.split("=")[1]?.trim();
+const requestedDate = process.argv.find((value) => value.startsWith("--date="))?.split("=")[1]?.trim();
 const skipRecordings = process.argv.includes("--skip-recordings");
+const generateNotebookAudio = process.argv.includes("--with-audio") || process.env.FULLHOUSE_GENERATE_NOTEBOOK_AUDIO === "1";
 const concurrency = Math.max(1, Math.min(8, Number(process.env.FULLHOUSE_CRAWL_CONCURRENCY ?? 4)));
+
+if (requestedDate && !/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) {
+  throw new Error("Ngày crawl phải có định dạng YYYY-MM-DD.");
+}
 
 function isFullhouseDomain(value) {
   const domain = String(value ?? "").trim().replace(/^\./, "").toLowerCase();
@@ -153,18 +160,21 @@ async function recordingInfo(session) {
       .filter(Boolean)
       .map(absoluteUrl),
   )];
-  const mediaByManifest = await mapLimit(manifests, concurrency, async (manifestUrl) => {
+  const manifestResults = await mapLimit(manifests, concurrency, async (manifestUrl) => {
     try {
-      return mediaUrlsFromManifest(await fetchJson(manifestUrl), manifestUrl);
+      const manifest = await fetchJson(manifestUrl);
+      return { manifest, mediaUrls: mediaUrlsFromManifest(manifest, manifestUrl) };
     } catch (error) {
       console.warn(`  ! Không đọc được file media từ ${manifestUrl}: ${error.message}`);
-      return [];
+      return null;
     }
   });
+  const validManifests = manifestResults.filter(Boolean);
   return {
     recordingCount: manifests.length,
     recordingManifestUrls: manifests,
-    recordingMediaUrls: [...new Set(mediaByManifest.flat())],
+    recordingMediaUrls: [...new Set(validManifests.flatMap((item) => item.mediaUrls))],
+    manifestData: validManifests.map((item) => item.manifest),
   };
 }
 
@@ -207,6 +217,8 @@ try {
 
   let imported = 0;
   let withRecordings = 0;
+  let audioReady = 0;
+  let audioFailed = 0;
   let failed = 0;
 
   for (const contest of contests) {
@@ -221,7 +233,8 @@ try {
       await mapLimit(sessions, concurrency, async (session) => {
         const existing = await db.collection("class_sessions").findOne({ sourceSystem: "fullhousedev", sourceSessionId: session.sourceSessionId });
         let recording = null;
-        if (lessonStatus(session.date, session.endTime) === "completed") {
+        const isRequestedDate = !requestedDate || session.date === requestedDate;
+        if (lessonStatus(session.date, session.endTime) === "completed" && isRequestedDate) {
           try {
             recording = await recordingInfo(session);
           } catch (error) {
@@ -235,6 +248,36 @@ try {
           ?? (Array.isArray(existing?.recordingMediaUrls) ? existing.recordingMediaUrls : []);
         const preservedStatus = ["reviewed", "issue"].includes(String(existing?.recordingStatus)) ? existing.recordingStatus : null;
         const recordingStatus = preservedStatus ?? (recordingCount > 0 ? "ready" : "pending_upload");
+        let notebookAudio = {
+          notebookAudioFile: existing?.notebookAudioFile ?? null,
+          notebookAudioStatus: existing?.notebookAudioStatus ?? "pending",
+          notebookAudioSize: existing?.notebookAudioSize ?? null,
+          notebookAudioDurationSeconds: existing?.notebookAudioDurationSeconds ?? null,
+          notebookAudioGeneratedAt: existing?.notebookAudioGeneratedAt ?? null,
+          notebookAudioError: existing?.notebookAudioError ?? null,
+        };
+        if (generateNotebookAudio && recording?.manifestData?.length) {
+          try {
+            notebookAudio = await buildNotebookAudio({
+              manifests: recording.manifestData,
+              sourceSessionId: session.sourceSessionId,
+              contestCode: code,
+              sessionNo: session.sessionNo,
+              concurrency,
+            });
+            audioReady += 1;
+          } catch (error) {
+            audioFailed += 1;
+            console.warn(`  ! Không ghép được audio buổi ${session.sessionNo}: ${error.message}`);
+            if (!notebookAudio.notebookAudioFile) {
+              notebookAudio = {
+                ...notebookAudio,
+                notebookAudioStatus: "error",
+                notebookAudioError: String(error.message ?? error).slice(0, 1_000),
+              };
+            }
+          }
+        }
         await db.collection("class_sessions").updateOne(
           { sourceSystem: "fullhousedev", sourceSessionId: session.sourceSessionId },
           {
@@ -258,6 +301,7 @@ try {
               recordingManifestUrls,
               recordingMediaUrls,
               recordingStatus,
+              ...notebookAudio,
               sourceActive: true,
               crawledAt: new Date(),
               updatedAt: new Date(),
@@ -289,7 +333,8 @@ try {
     db.collection("class_sessions").createIndex({ sourceSystem: 1, date: -1, startTime: 1 }),
     db.collection("class_sessions").createIndex({ sourceSystem: 1, recordingStatus: 1 }),
   ]);
-  console.log(`\nHoàn tất: ${imported} buổi, ${withRecordings} buổi có recording, ${failed} contest lỗi.`);
+  const audioSummary = generateNotebookAudio ? `, ${audioReady} audio NotebookLM, ${audioFailed} audio lỗi` : "";
+  console.log(`\nHoàn tất: ${imported} buổi, ${withRecordings} buổi có recording${audioSummary}, ${failed} contest lỗi.`);
 } finally {
   await client.close();
 }

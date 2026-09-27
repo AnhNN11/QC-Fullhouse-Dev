@@ -25,8 +25,8 @@ import {
   CheckCircleOutlined,
   ClockCircleOutlined,
   CodeOutlined,
-  CopyOutlined,
   CloudDownloadOutlined,
+  DownloadOutlined,
   ExclamationCircleOutlined,
   PlayCircleOutlined,
   ReloadOutlined,
@@ -53,6 +53,10 @@ type QcSession = {
   recordingMediaUrls?: string[];
   recordingCount: number;
   recordingStatus: "pending_upload" | "ready" | "reviewed" | "issue";
+  notebookAudioStatus?: "pending" | "ready" | "error";
+  notebookAudioSize?: number;
+  notebookAudioDurationSeconds?: number;
+  notebookAudioError?: string;
   qcScore?: number;
   qcNote?: string;
 };
@@ -112,6 +116,17 @@ function cookiesFromFile(text: string) {
   throw new Error("File không có cookie sessionid của fullhousedev.com.");
 }
 
+function audioSummary(row: QcSession) {
+  const parts = [];
+  if (row.notebookAudioSize) parts.push(`${(row.notebookAudioSize / 1024 / 1024).toFixed(1)} MB`);
+  if (row.notebookAudioDurationSeconds) {
+    const hours = Math.floor(row.notebookAudioDurationSeconds / 3600);
+    const minutes = Math.floor((row.notebookAudioDurationSeconds % 3600) / 60);
+    parts.push(hours ? `${hours} giờ ${minutes} phút` : `${minutes} phút`);
+  }
+  return parts.join(" · ");
+}
+
 export default function SessionQc() {
   const { message } = App.useApp();
   const [items, setItems] = useState<QcSession[]>([]);
@@ -128,21 +143,6 @@ export default function SessionQc() {
   const [crawling, setCrawling] = useState(false);
   const [form] = Form.useForm();
   const [crawlForm] = Form.useForm();
-
-  const copyRecordingLinks = useCallback(async (row: QcSession) => {
-    const mediaLinks = row.recordingMediaUrls?.filter(Boolean) ?? [];
-    const links = mediaLinks.length ? mediaLinks : (row.recordingManifestUrls?.filter(Boolean) ?? []);
-    if (!links.length) {
-      message.warning("Chưa có link trực tiếp. Hãy crawl lại buổi học này.");
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(links.join("\n"));
-      message.success(`Đã sao chép ${links.length} link file record`);
-    } catch {
-      message.error("Trình duyệt không cho phép sao chép link tự động.");
-    }
-  }, [message]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -185,11 +185,16 @@ export default function SessionQc() {
     {
       title: "RECORD",
       key: "recording",
-      width: 180,
+      width: 205,
       render: (_, row) => row.recordingCount > 0
         ? <Space size={2} orientation="vertical" align="start">
           <Button type="link" size="small" icon={<PlayCircleOutlined />} href={row.recordingUrl} target="_blank" rel="noopener noreferrer">Xem ({row.recordingCount})</Button>
-          <Button type="link" size="small" icon={<CopyOutlined />} onClick={() => void copyRecordingLinks(row)}>Sao chép link file</Button>
+          {row.notebookAudioStatus === "ready" ? <>
+            <Button type="link" size="small" icon={<DownloadOutlined />} href={`/api/qc-sessions/${row.id}/audio`} download>Tải audio NotebookLM</Button>
+            {audioSummary(row) && <Typography.Text type="secondary" className={styles.audioMeta}>{audioSummary(row)}</Typography.Text>}
+          </> : row.notebookAudioStatus === "error"
+            ? <Typography.Text type="danger" className={styles.audioMeta} title={row.notebookAudioError}>Ghép audio lỗi · crawl lại</Typography.Text>
+            : <Typography.Text type="secondary" className={styles.audioMeta}>Chưa tạo audio</Typography.Text>}
         </Space>
         : <Typography.Text type="secondary">Chưa có</Typography.Text>,
     },
@@ -221,7 +226,7 @@ export default function SessionQc() {
         }}
       >{row.recordingStatus === "ready" ? "Nhận xét" : "Sửa nhận xét"}</Button>,
     },
-  ], [copyRecordingLinks, form]);
+  ], [form]);
 
   async function submitEvaluation(values: { score: number; outcome: "reviewed" | "issue"; note?: string }) {
     if (!selected) return;
@@ -244,13 +249,18 @@ export default function SessionQc() {
     }
   }
 
-  async function runWebCrawl(values: { cookie: string; contestCode?: string }) {
+  async function runWebCrawl(values: { cookie: string; contestCode?: string; crawlDate?: dayjs.Dayjs }) {
     setCrawling(true);
     try {
       const response = await fetch("/api/local-crawl", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
+        body: JSON.stringify({
+          cookie: values.cookie,
+          contestCode: values.contestCode,
+          crawlDate: values.crawlDate?.format("YYYY-MM-DD") ?? vietnamDate(-1),
+          generateAudio: true,
+        }),
       });
       const result = (await response.json()) as { message?: string; error?: string };
       if (!response.ok) throw new Error(result.error ?? "Không thể chạy crawler");
@@ -281,7 +291,7 @@ export default function SessionQc() {
         showIcon
         icon={<CodeOutlined />}
         title="Crawler chạy trực tiếp trên web"
-        description="Crawler lấy link file .webm/.ogg công khai. Sau khi crawl, bấm Sao chép link file ở từng buổi để đưa sang công cụ phân tích hoặc tải về."
+        description="Crawler tự tải các đoạn âm thanh, đồng bộ đúng timeline và ghép thành một file MP3. Sau khi hoàn tất, bấm Tải audio NotebookLM ở từng buổi."
       />
 
       <Row gutter={[14, 14]} className={styles.stats}>
@@ -380,7 +390,7 @@ export default function SessionQc() {
           description="Chỉ sử dụng trên hệ thống QC nội bộ. Cookie được gửi đến máy chủ để chạy crawler và không được lưu sau khi kết thúc."
           className={styles.modalAlert}
         />
-        <Form form={crawlForm} layout="vertical" onFinish={runWebCrawl} preserve={false}>
+        <Form form={crawlForm} layout="vertical" onFinish={runWebCrawl} preserve={false} initialValues={{ crawlDate: dayjs(vietnamDate(-1)) }}>
           <Form.Item label="Tải file cookie">
             <Upload
               accept=".txt,.json"
@@ -407,6 +417,9 @@ export default function SessionQc() {
             extra="Dán toàn bộ giá trị Cookie của một request đang đăng nhập trên fullhousedev.com."
           >
             <Input.Password autoComplete="off" placeholder="sessionid=...; csrftoken=..." />
+          </Form.Item>
+          <Form.Item name="crawlDate" label="Ngày cần crawl và ghép audio" rules={[{ required: true, message: "Hãy chọn ngày cần crawl" }]}>
+            <DatePicker allowClear={false} format="DD/MM/YYYY" style={{ width: "100%" }} />
           </Form.Item>
           <Form.Item name="contestCode" label="Mã contest (không bắt buộc)" extra="Để trống để crawl tất cả contest trong MongoDB.">
             <Input placeholder="Ví dụ: pynhatanh1on1062026" autoComplete="off" />

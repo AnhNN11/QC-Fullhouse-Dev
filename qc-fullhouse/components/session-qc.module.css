@@ -17,6 +17,7 @@
 .qcComment { display: flex; align-items: flex-start; gap: 6px; }
 .qcComment :global(.ant-tag) { flex: 0 0 auto; margin: 0; }
 .qcComment span { display: -webkit-box; overflow: hidden; color: #4f5d71; font-size: 11px; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.audioMeta { padding-left: 8px; font-size: 11px !important; }
 .pendingRow > td { background: #f6f9ff !important; }
 .pendingRow > td:first-child { box-shadow: inset 3px 0 #3b78ed; }
 .reviewedRow > td { background: #f6fcf9 !important; }

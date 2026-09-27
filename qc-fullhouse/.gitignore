@@ -20,6 +20,10 @@
 # production
 /build
 
+# locally generated NotebookLM audio
+/storage/recordings/
+/exports/
+
 # misc
 .DS_Store
 *.pem

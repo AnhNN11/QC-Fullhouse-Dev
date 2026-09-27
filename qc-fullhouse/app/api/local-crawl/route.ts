@@ -9,14 +9,21 @@ export const maxDuration = 300;
 type CrawlPayload = {
   cookie?: string;
   contestCode?: string;
+  crawlDate?: string;
+  generateAudio?: boolean;
 };
 
 let crawlRunning = false;
 
-function runCrawler(cookie: string, contestCode: string) {
+function runCrawler(cookie: string, contestCode: string, crawlDate: string, generateAudio: boolean) {
   return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
     const script = path.join(process.cwd(), "scripts", "crawl-sessions.mjs");
-    const args = [script, ...(contestCode ? [`--contest=${contestCode}`] : [])];
+    const args = [
+      script,
+      ...(contestCode ? [`--contest=${contestCode}`] : []),
+      ...(crawlDate ? [`--date=${crawlDate}`] : []),
+      ...(generateAudio ? ["--with-audio"] : []),
+    ];
     const child = spawn(process.execPath, args, {
       cwd: process.cwd(),
       env: { ...process.env, FULLHOUSE_SESSION_COOKIE: cookie },
@@ -52,15 +59,20 @@ export async function POST(request: Request) {
     const body = (await request.json()) as CrawlPayload;
     const cookie = body.cookie?.trim() ?? "";
     const contestCode = body.contestCode?.trim() ?? "";
+    const crawlDate = body.crawlDate?.trim() ?? "";
+    const generateAudio = body.generateAudio !== false;
     if (cookie.length < 12 || !/(^|;\s*)sessionid=/.test(cookie)) {
       return NextResponse.json({ error: "Cookie không hợp lệ. Cần có giá trị sessionid=..." }, { status: 400 });
     }
     if (contestCode && !/^[a-zA-Z0-9_-]{1,100}$/.test(contestCode)) {
       return NextResponse.json({ error: "Mã contest không hợp lệ." }, { status: 400 });
     }
+    if (crawlDate && !/^\d{4}-\d{2}-\d{2}$/.test(crawlDate)) {
+      return NextResponse.json({ error: "Ngày crawl phải có định dạng YYYY-MM-DD." }, { status: 400 });
+    }
 
     crawlRunning = true;
-    const result = await runCrawler(cookie, contestCode);
+    const result = await runCrawler(cookie, contestCode, crawlDate, generateAudio);
     const summary = result.stdout.trim().split("\n").filter(Boolean).at(-1) ?? "Đã crawl xong.";
     return NextResponse.json({ message: summary });
   } catch (error) {
