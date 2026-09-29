@@ -1,0 +1,3 @@
+/* Design boards contain branding and product details at their edges. */
+.edu img.ed-journal-design-board{object-fit:contain;background:#edf4f9}
+.edu a:is(:hover,:focus-visible) img.ed-journal-design-board{transform:none}

@@ -1,0 +1,12 @@
+# Public programme white-uniform artwork
+
+Mode: built-in imagegen skill; identity-preserve. Original photos retained. Outputs in this directory, consumed by lib/edu-program-media.ts. No names or instructor assignments inferred.
+
+## course-data-structures-representative-v1.png
+References: lakeside-original.png for person, uniform-reference.png for uniform only.
+Prompt: Use case: identity-preserve. Landscape 16:9 DolphinX Edu course editorial marketing image. Reference1 is the ONLY facial identity, preserve this specific man's facial features, hairstyle, skin tone and natural skin texture, no beautification or generic replacement. Reference2 uniform board: use WHITE polo version with blue/cyan fine collar and sleeve piping, small DolphinX embroidery, simple clipped blank name badge. Replace original environment and clothes and remove bags/phone. One man waist up on right, head fully inside frame with breathing room. Shared soft gray-blue studio background and soft window lighting. Natural slightly asymmetrical relaxed posture, realistic fabric, professional photograph not CGI. Simple elegant array tiles, linked nodes, a small tree diagram and recognizable Python logo on left. Subject holding a marker naturally. Keep graphics separate from face. No cartoon dolphin mascot, no course title or invented person name, no hologram, no plastic skin.
+
+## course-interview-representative-v1.png
+References: street-original.png for person, uniform-reference.png for uniform only.
+Prompt: Use case: identity-preserve. Landscape 16:9 DolphinX Edu course editorial marketing image. Reference1 is the ONLY facial identity, preserve this specific man's facial features, hairstyle, skin tone and natural skin texture, no beautification or generic replacement. Reference2 uniform board: use WHITE polo version with blue/cyan fine collar and sleeve piping, small DolphinX embroidery, simple clipped blank name badge. Replace original environment and clothes and remove bags/phone. One man waist up on right, head fully inside frame with breathing room. Shared soft gray-blue studio background and soft window lighting. Natural slightly asymmetrical relaxed posture, realistic fabric, professional photograph not CGI. Recognizable JavaScript JS square and Python logo plus a subtle code window and check marks on left. Subject holding a slim notebook naturally. Keep graphics separate from face. No cartoon dolphin mascot, no course title or invented person name, no hologram, no plastic skin.
+

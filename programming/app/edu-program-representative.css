@@ -1,0 +1,4 @@
+.edu-program-representative figure{margin:0;background:#dce8f3}
+.edu-program-representative figure img{display:block;width:100%;height:auto;aspect-ratio:1672/941;object-fit:contain}
+.edu-program-representative figcaption{padding:9px 16px;font-size:10px;line-height:1.5;color:#536a80;background:#edf3f8}
+@media(max-width:850px){.edu-program-detail.edu-program-representative{display:block}}

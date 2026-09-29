@@ -1,0 +1,41 @@
+.dx-learning-shell .side-nav a{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:9px;color:#667188;font-size:14px;font-weight:650;text-decoration:none}
+.dx-learning-shell .side-nav a svg{width:20px;height:20px;flex-shrink:0}
+.dx-learning-shell .side-nav a:hover,.dx-learning-shell .side-nav a.active{background:var(--sky);color:var(--blue-dark)}
+.dx-learning-shell .side-nav a:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+.dx-learning-shell .sidebar-upgrade a{display:inline-block;background:white;color:var(--blue-dark);padding:8px 11px;border-radius:7px;font-size:11px;font-weight:700}
+.dx-learning-shell .learning-content{min-width:0;min-height:calc(100dvh - 68px)}
+.dx-learning-shell .learning-hub{min-height:calc(100dvh - 68px)}
+@media(min-width:901px) and (max-width:1200px){.dx-learning-shell .learning-hub .hub-grid{grid-template-columns:minmax(0,1fr)}}
+.dx-learning-shell .academy,.dx-learning-shell .rm{min-height:calc(100dvh - 68px);background:var(--canvas)}
+.dx-learning-shell .academy>header,.dx-learning-shell .rm>.rm-nav{display:none}
+.dx-learning-shell .academy-intro,.dx-learning-shell .lesson-heading{padding-top:32px}
+.dx-learning-shell .academy h1{font-size:clamp(32px,4vw,54px)}
+.dx-learning-shell .academy-courses{grid-template-columns:repeat(2,minmax(0,1fr))}
+.dx-learning-shell .lesson-grid{grid-template-columns:minmax(0,1fr) 270px;gap:20px}
+.dx-learning-shell .consult-grid{gap:32px}
+.dx-learning-shell .sidebar{overflow-y:auto}
+.dx-learning-shell .sidebar-upgrade{flex-shrink:0}
+@media(max-height:820px){.dx-learning-shell .sidebar-upgrade{display:none}}
+.dx-learning-shell .dashboard-loading{grid-template-columns:minmax(0,1fr);min-height:calc(100dvh - 68px)}
+.dx-learning-shell .loading-content{padding:40px 28px}
+.dx-learning-shell .dashboard-error{min-height:calc(100dvh - 68px)}
+@media(max-width:900px){.dx-learning-shell .sidebar:not(.open){visibility:hidden}.dx-learning-shell .sidebar.open{visibility:visible}}
+@media(min-width:1500px){.dx-learning-shell .academy-courses{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:1100px){.dx-learning-shell .lesson-grid{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:700px){.dx-learning-shell .academy-courses{grid-template-columns:minmax(0,1fr)}.dx-learning-shell .consult-grid{grid-template-columns:minmax(0,1fr)}.dx-learning-shell .global-search{width:100%}}
+.app-shell.dx-learning-shell .sidebar{background:linear-gradient(180deg,#fff 0%,#f7faff 100%);padding:22px 16px 16px;border-right:1px solid #e2eaf5}
+.app-shell.dx-learning-shell .brand-wrap{padding:0 4px 22px;margin-bottom:4px;border-bottom:1px solid #e7eef7}
+.app-shell.dx-learning-shell .side-nav{gap:4px;margin-top:4px}
+.app-shell.dx-learning-shell .side-nav .nav-label{display:block;font-size:8px;letter-spacing:1.5px;color:#94a5bb;font-weight:750;padding:18px 12px 9px;margin:0}
+.app-shell.dx-learning-shell .side-nav a{position:relative;gap:10px;padding:7px 10px;min-height:42px;border:1px solid transparent;border-radius:11px;font-size:12px;font-weight:550;color:#6d7e96;transition:background .18s,color .18s}
+.app-shell.dx-learning-shell .side-nav .nav-icon{display:grid;place-items:center;width:28px;height:28px;border-radius:8px;flex-shrink:0;background:#edf3fa88}
+.app-shell.dx-learning-shell .side-nav a svg{width:17px;height:17px;stroke-width:1.7}
+.app-shell.dx-learning-shell .side-nav a.active{background:linear-gradient(115deg,#e3eeff,#eef6ff);border-color:#d7e6fb;color:#2865ba;font-weight:750;box-shadow:0 3px 8px #2865ba06}
+.app-shell.dx-learning-shell .side-nav a.active .nav-icon{color:#fff;background:#3576d4;box-shadow:0 3px 8px #3576d430}
+.app-shell.dx-learning-shell .side-nav a:hover:not(.active){background:#edf4fc;color:#315d92}
+.nav-active-dot{width:5px;height:5px;border-radius:50%;background:#4c83ce;margin-left:auto}
+.app-shell.dx-learning-shell .sidebar-profile{border:1px solid #dfe9f5;background:#fff;border-radius:12px;padding:11px;margin-top:auto;gap:10px}
+.app-shell.dx-learning-shell .sidebar-profile strong{font-size:11px}.app-shell.dx-learning-shell .sidebar-profile small{font-size:9px}
+.app-shell.dx-learning-shell .topbar{border-bottom:1px solid #e4ebf5;background:#ffffffed;backdrop-filter:blur(12px)}
+.app-shell.dx-learning-shell .global-search{background:#f4f7fc;border:1px solid #eaf0f8;border-radius:11px}
+@media(prefers-reduced-motion:reduce){.app-shell.dx-learning-shell .side-nav a{transition:none}}

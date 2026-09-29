@@ -1,0 +1,22 @@
+import { ObjectId } from "mongodb";
+import Link from "next/link";
+import { getSessionUser } from "@/lib/user-auth";
+import { getMongoDatabase } from "@/lib/mongodb";
+import AcademyForm from "@/app/academy/form";
+import CourseSignIn from "@/app/course-sign-in";
+import MyEnrollments from "@/app/my-enrollments";
+import { saveProfile, changePassword } from "@/app/profile-actions";
+import "@/app/academy.css";
+import "@/app/profile.css";
+
+export const dynamic = "force-dynamic";
+export default async function ProfilePage() {
+  const user = await getSessionUser();
+  if (!user) return <main className="profile-page"><h1>Hồ sơ của bạn</h1><p>Đăng nhập để quản lý thông tin và bảo mật tài khoản.</p><CourseSignIn autoOpen={false}/></main>;
+  const db = await getMongoDatabase();
+  const account = await db.collection("users").findOne({ _id: new ObjectId(user.id) }, { projection: { name: 1, email: 1, bio: 1, goal: 1, website: 1, createdAt: 1 } });
+  if (!account) return <main className="profile-page"><h1>Tài khoản không còn tồn tại</h1><Link href="/dashboard">Quay lại dashboard</Link></main>;
+  const enrolled = await db.collection("course_enrollments").countDocuments({ userId: user.id, status: "active" });
+  const initials = user.name.split(/\s+/).slice(-2).map(word => word[0]).join("").toUpperCase();
+  return <main className="profile-page"><header className="profile-hero"><span className="profile-monogram" aria-hidden="true">{initials}</span><div><span className="profile-eyebrow">KHÔNG GIAN CỦA BẠN</span><h1>{user.name}</h1><p>{user.email}</p><small>{account.createdAt instanceof Date ? `Thành viên từ ${account.createdAt.toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })} · ` : ""}{enrolled} khóa học đã đăng ký</small></div></header><nav className="profile-tabs" aria-label="Cài đặt hồ sơ"><a href="#personal">Thông tin cá nhân</a><a href="#security">Bảo mật</a><a href="#my-learning">Khóa học của tôi</a></nav><div className="profile-grid"><section className="profile-card" id="personal"><span className="profile-eyebrow">01 / HỒ SƠ</span><h2>Giới thiệu về bạn</h2><p>Tên hiển thị xuất hiện trong cộng đồng và bảng xếp hạng. Các thông tin bổ sung bên dưới chỉ hiển thị trong hồ sơ riêng của bạn.</p><AcademyForm action={saveProfile} label="Lưu thông tin"><label>Họ và tên<input name="name" defaultValue={user.name} required minLength={2} maxLength={80} autoComplete="name"/></label><label>Email đăng nhập<input value={user.email} readOnly type="email" aria-describedby="email-note"/></label><small id="email-note">Email chưa hỗ trợ thay đổi vì cần bước xác minh địa chỉ mới.</small><label>Giới thiệu bản thân<textarea name="bio" defaultValue={account.bio || ""} maxLength={500} rows={3} placeholder="Bạn đang học hay làm việc trong lĩnh vực nào?"/></label><label>Mục tiêu học tập<textarea name="goal" defaultValue={account.goal || ""} maxLength={500} rows={3} placeholder="Ví dụ: Xây dựng ứng dụng fullstack đầu tiên trong 3 tháng."/></label><label>Website / portfolio<input name="website" defaultValue={account.website || ""} type="url" maxLength={300} placeholder="https://..."/></label></AcademyForm></section><section className="profile-card" id="security"><span className="profile-eyebrow">02 / BẢO MẬT</span><h2>Đổi mật khẩu</h2><p>Sử dụng mật khẩu riêng cho tài khoản này. Sau khi đổi, các phiên đăng nhập cũ sẽ bị đăng xuất.</p><AcademyForm action={changePassword} label="Cập nhật mật khẩu"><label>Mật khẩu hiện tại<input type="password" name="currentPassword" autoComplete="current-password" minLength={8} maxLength={128} required/></label><label>Mật khẩu mới<input type="password" name="password" autoComplete="new-password" minLength={8} maxLength={128} required/></label><label>Xác nhận mật khẩu mới<input type="password" name="confirmPassword" autoComplete="new-password" minLength={8} maxLength={128} required/></label><small>Từ 8–128 ký tự. Không dùng lại mật khẩu hiện tại.</small></AcademyForm><div className="profile-tip"><strong>Học theo nhịp của riêng bạn</strong><p>Chưa biết bắt đầu từ đâu? Khám phá khóa học hoặc tìm mentor đồng hành.</p><Link href="/courses">Khám phá khóa học →</Link></div></section></div><section className="profile-card" id="my-learning"><span className="profile-eyebrow">03 / HÀNH TRÌNH HỌC</span>{enrolled ? <MyEnrollments/> : <><h2>Chưa có khóa học đã đăng ký</h2><p>Chọn khóa học phù hợp để bắt đầu hành trình của bạn.</p><Link href="/courses">Khám phá thư viện khóa học →</Link></>}</section></main>;
+}

@@ -1,0 +1,21 @@
+.ed-study-band{background:var(--ed-navy,#142d48);padding:100px 0;color:#fff}
+.ed-study-heading{max-width:760px;margin-bottom:48px}
+.ed-study-heading .edu-label{color:#b5d6ed}
+.ed-study-heading h2{margin:0 0 24px}
+.ed-study-heading p{color:#c5d6e4;max-width:620px}
+.ed-study-cards{display:grid;gap:28px}
+.ed-study-card{background:#fff;color:#142d48;padding:36px;display:flex;flex-direction:column}
+.ed-study-card header{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;padding-bottom:28px;border-bottom:1px solid #c8d3dd}
+.edu .ed-study-card h3{font-size:30px;margin:0 0 8px;line-height:1.3}
+.edu .ed-study-card header p{font-size:15px;margin:0;color:#657789}
+.ed-study-badge{flex-shrink:0;background:#edf4f8;padding:16px 20px;font-size:18px}
+.ed-study-card ul{list-style:none;padding:0;margin:28px 0 20px;display:grid;gap:14px}
+.ed-study-card li{display:flex;gap:14px;align-items:flex-start;font-size:16px;line-height:1.65}
+.edu .ed-study-card li svg{width:23px;height:23px;flex-shrink:0;margin-top:2px;stroke-width:1.5}
+.edu .ed-study-card .ed-study-note{font-size:13px;color:#657789;line-height:1.65;margin:0 0 26px}
+.ed-study-card>a{display:flex;align-items:center;justify-content:center;gap:12px;border:1px solid #7e919f;min-height:48px;padding:10px 18px;margin-top:auto;transition:color .2s,background .2s}
+.ed-study-card>a:hover{background:#142d48;color:white}
+.ed-study-card>a:focus-visible{outline:3px solid #278ec6;outline-offset:4px}
+@media(min-width:1450px){.ed-study-cards{grid-template-columns:repeat(3,minmax(0,1fr))}.ed-study-card{padding:28px}.ed-study-card header{flex-direction:column}.ed-study-card li{font-size:15px}}
+@media(max-width:600px){.ed-study-band{padding:60px 0}.ed-study-heading{margin-bottom:32px}.ed-study-card{padding:24px}.ed-study-card header{flex-direction:column;gap:18px;padding-bottom:24px}.edu .ed-study-card h3{font-size:27px}.ed-study-badge{font-size:15px;padding:10px 14px}.ed-study-card li{font-size:15px}}
+@media(prefers-reduced-motion:reduce){.ed-study-card>a{transition:none}}

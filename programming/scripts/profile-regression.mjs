@@ -1,0 +1,51 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import { createRequire } from 'node:module';
+import { randomBytes } from 'node:crypto';
+import { MongoClient, ObjectId } from 'mongodb';
+import nextEnv from '@next/env';
+import ts from 'typescript';
+nextEnv.loadEnvConfig(process.cwd());
+const name = `codex_profile_test_${randomBytes(8).toString('hex')}`;
+const client = await new MongoClient(process.env.MONGODB_URI).connect();
+const db = client.db(name), native = createRequire(import.meta.url);
+let user = null, allowed = true, rotated = 0;
+const compile = (file, require) => { const exports = {}; vm.runInNewContext(ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports, require, Buffer, Date, URL }); return exports; };
+const passwords = compile('lib/passwords.ts', native);
+const actions = compile('app/profile-actions.ts', id => {
+  if (id === 'next/cache') return { revalidatePath() {} };
+  if (id === '@/lib/user-auth') return { getSessionUser: async () => user, allowAuthAttempt: async () => allowed, createUserSession: async () => { rotated++; } };
+  if (id === '@/lib/mongodb') return { getMongoDatabase: async () => db };
+  if (id === '@/lib/passwords') return passwords;
+  return native(id);
+});
+const form = values => { const f = new FormData(); Object.entries(values).forEach(([k,v]) => f.set(k,v)); return f; };
+try {
+  const id = new ObjectId(), other = new ObjectId();
+  await db.collection('users').insertMany([{ _id: id, name: 'Before', email: 'test@example.invalid', passwordHash: await passwords.hashPassword('Old-test-pass-123'), xp: 7 }, { _id: other, name: 'Other' }]);
+  const profile = form({ name: 'Updated Name', bio: 'Hello', goal: 'Learn', website: 'https://example.com', userId: other.toString(), xp: '999', email: 'evil@example.invalid' });
+  assert.ok((await actions.saveProfile({}, profile)).error);
+  user = { id: id.toString() };
+  assert.ok((await actions.saveProfile({}, form({ name: 'A' }))).error);
+  assert.ok((await actions.saveProfile({}, form({ name: 'Valid Name', website: 'javascript:alert(1)' }))).error);
+  assert.ok((await actions.saveProfile({}, profile)).success);
+  const updated = await db.collection('users').findOne({ _id: id });
+  assert.equal(updated.name, 'Updated Name'); assert.equal(updated.xp, 7); assert.equal(updated.email, 'test@example.invalid');
+  assert.equal((await db.collection('users').findOne({ _id: other })).name, 'Other');
+  const change = form({ currentPassword: 'Old-test-pass-123', password: 'New-test-pass-456', confirmPassword: 'New-test-pass-456' });
+  allowed = false; assert.ok((await actions.changePassword({}, change)).error); allowed = true;
+  assert.ok((await actions.changePassword({}, form({ currentPassword: 'Wrong-password', password: 'New-test-pass-456', confirmPassword: 'New-test-pass-456' }))).error);
+  await db.collection('user_sessions').insertMany([{ userId: user.id }, { userId: user.id }, { userId: other.toString() }]);
+  assert.ok((await actions.changePassword({}, change)).success);
+  assert.equal(rotated, 1); assert.equal(await db.collection('user_sessions').countDocuments({ userId: user.id }), 0);
+  assert.equal(await db.collection('user_sessions').countDocuments({ userId: other.toString() }), 1);
+  const account = await db.collection('users').findOne({ _id: id });
+  assert.equal(await passwords.verifyPassword('New-test-pass-456', account.passwordHash), true);
+  assert.equal(await passwords.verifyPassword('Old-test-pass-123', account.passwordHash), false);
+  console.log('PASS profile: authentication, validation, ownership, protected fields, password verification, throttling, hashing, session revocation.');
+} finally {
+  if (!/^codex_profile_test_[a-f0-9]{16}$/.test(name)) throw new Error('Unsafe cleanup');
+  await db.dropDatabase(); await client.close();
+  console.log('Removed isolated test database; application accounts unchanged.');
+}

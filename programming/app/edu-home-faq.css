@@ -1,0 +1,15 @@
+.edu-faq.edu-home-faq{display:block}
+.edu-home-faq>div:first-child{margin-bottom:42px}
+.edu-home-faq>div:first-child>.edu-link{margin-top:22px}
+.edu-home-faq>div:last-child{background:#eff5f9;padding:18px 40px}
+.edu-home-faq details{border-bottom:1px solid #cfdde7}
+.edu-home-faq details:last-child{border-bottom:0}
+.edu-home-faq summary{position:relative;display:flex;align-items:center;justify-content:space-between;gap:24px;padding:26px 0 26px 22px;font-family:var(--font-geist-sans),Arial,sans-serif;font-size:23px;font-weight:550;line-height:1.5;list-style:none}
+.edu-home-faq summary::-webkit-details-marker{display:none}
+.edu-home-faq summary::before{content:"";position:absolute;left:0;width:3px;height:28px;background:#163650}
+.edu-home-faq summary svg{flex-shrink:0;transition:transform .2s ease}
+.edu-home-faq details[open] summary svg{transform:rotate(90deg)}
+.edu-home-faq details>p{max-width:900px;padding:0 46px 26px 22px;margin:0;font-size:15px;line-height:1.85}
+.edu-home-faq summary:focus-visible{outline:2px solid #267dbc;outline-offset:5px}
+@media(max-width:600px){.edu-home-faq>div:last-child{padding:8px 20px}.edu-home-faq summary{font-size:18px;padding-block:22px;gap:14px}.edu-home-faq details>p{font-size:13px;padding:0 0 22px 22px}}
+@media(prefers-reduced-motion:reduce){.edu-home-faq summary svg{transition:none}}

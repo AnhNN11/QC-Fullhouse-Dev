@@ -1,0 +1,136 @@
+// Local integration checks. Creates isolated test users, then removes only those users.
+import assert from "node:assert/strict";
+import { randomBytes, createHmac } from "node:crypto";
+import { MongoClient } from "mongodb";
+import nextEnv from "@next/env";
+nextEnv.loadEnvConfig(process.cwd());
+const origin = process.env.TEST_ORIGIN ?? "http://localhost:3000";
+const marker = randomBytes(8).toString("hex");
+const emails = [`auth-test-${marker}-a@example.invalid`, `auth-test-${marker}-b@example.invalid`];
+const password = randomBytes(20).toString("hex");
+async function call(path, method = "GET", body, cookie = "", requestOrigin = origin) {
+  const response = await fetch(origin + path, { method, headers: { Origin: requestOrigin, ...(body ? { "Content-Type": "application/json" } : {}), ...(cookie ? { Cookie: cookie } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
+  const json = await response.json();
+  return { status: response.status, json, cookie: response.headers.get("set-cookie") };
+}
+const client = await new MongoClient(process.env.MONGODB_URI).connect();
+const db = client.db();
+try {
+  assert.equal((await call("/api/auth")).json.user, null);
+  assert.equal((await call("/api/progress", "PATCH", { courseId: "python", progress: 30 })).status, 401);
+  assert.equal((await call("/api/submissions", "POST", { problemId: 1, language: "javascript", code: "" })).status, 401);
+  assert.equal((await call("/api/auth", "POST", { mode: "login", email: emails[0], password }, "", "https://wrong.example")).status, 403);
+  assert.equal((await call("/api/auth", "POST", { mode: "register", name: "Test", email: emails[0], password, confirmPassword: "wrong" })).status, 400);
+  const a = await call("/api/auth", "POST", { mode: "register", name: "Test Alpha", email: emails[0], password, confirmPassword: password });
+  assert.equal(a.status, 200); assert.ok(a.cookie.includes("HttpOnly")); assert.ok(a.cookie.includes("SameSite=lax"));
+  const cookieA = a.cookie.split(";")[0];
+  assert.equal((await call("/api/auth", "GET", undefined, cookieA)).json.user.email, emails[0]);
+  assert.equal((await call("/api/auth", "POST", { mode: "register", name: "Test", email: emails[0].toUpperCase(), password, confirmPassword: password })).status, 409);
+  assert.equal((await call("/api/auth", "POST", { mode: "login", email: emails[0], password: "wrongpassword" })).status, 401);
+  const stored = await db.collection("users").findOne({ email: emails[0] });
+  assert.ok(stored.passwordHash.startsWith("scrypt:")); assert.notEqual(stored.passwordHash, password);
+  assert.equal((await call("/api/progress", "PATCH", { courseId: "python", progress: 30 }, cookieA)).status, 200);
+  const b = await call("/api/auth", "POST", { mode: "register", name: "Test Beta", email: emails[1], password, confirmPassword: password });
+  assert.equal(b.status, 200);
+  const cookieB = b.cookie.split(";")[0];
+  const dataA = (await call("/api/dashboard", "GET", undefined, cookieA)).json;
+  const dataB = (await call("/api/dashboard", "GET", undefined, cookieB)).json;
+  const guest = (await call("/api/dashboard")).json;
+  assert.equal(dataA.learner.name, "Test Alpha"); assert.equal(dataB.learner.name, "Test Beta"); assert.equal(guest.learner.name, "Khách");
+  assert.equal(dataA.courses.find(c => c.id === "python").progress, 30);
+  assert.equal(dataB.courses.find(c => c.id === "python").progress, 0);
+  assert.equal(guest.courses.find(c => c.id === "python").progress, 0);
+  assert.equal(dataA.learner.streak, 1);
+  assert.equal(dataA.weeklyActivity.reduce((a,b)=>a+b,0), 1);
+  assert.equal(dataB.learner.streak, 0);
+  for (const url of ['/dashboard', '/courses', '/courses/python', '/roadmaps', '/roadmaps/frontend', '/consultation']) {
+    const response = await fetch(origin+url,{headers:{Cookie:cookieA}});
+    assert.equal(response.status,200);
+    const page = await response.text();
+    assert.equal((page.match(/id="learning-navigation"/g) ?? []).length,url.startsWith('/roadmaps')?0:1,`${url}: public roadmaps, shared sidebar only for learning routes`);
+    assert.ok(page.includes('Test Alpha'),`${url}: signed-in account in shared layout`);
+    assert.ok(page.includes('href="/dashboard"'));
+    assert.ok(page.includes('href="/courses"'));
+    assert.ok(page.includes('href="/roadmaps"'));
+  }
+  const invalidSolution = "function solve() { /* Map intentionally wrong code that never evaluates inputs or calculates a solution */ return 0; }";
+  const payload = {problemId:1,language:"javascript",code:invalidSolution,mode:'submit'};
+  const rejected = await call("/api/submissions", "POST", payload,cookieA);
+  assert.equal(rejected.status,200);
+  assert.equal(rejected.json.accepted,false);
+  assert.equal(await db.collection("submissions").countDocuments({learnerId:a.json.user.id}),1);
+  assert.equal((await call("/api/dashboard","GET",undefined,cookieA)).json.learner.xp,dataA.learner.xp);
+  assert.equal((await call('/api/submissions','POST',payload,cookieA)).status,429);
+  const release = () => db.collection('judge_leases').updateOne({_id:a.json.user.id},{$set:{expiresAt:new Date(0)}});
+  const valid = {...payload,code:'function solve(a,t){let m=new Map();for(let i=0;i<a.length;i++){if(m.has(t-a[i]))return [m.get(t-a[i]),i];m.set(a[i],i)}}'};
+  await release();
+  const run = await call('/api/submissions','POST',{...valid,mode:'run'},cookieA);
+  assert.equal(run.json.accepted,true);
+  assert.equal(await db.collection('submissions').countDocuments({learnerId:a.json.user.id}),1);
+  assert.equal((await call('/api/dashboard','GET',undefined,cookieA)).json.learner.xp,dataA.learner.xp);
+  await release();
+  assert.equal((await call('/api/submissions','POST',valid,cookieA)).json.accepted,true);
+  await release();
+  assert.equal((await call('/api/submissions','POST',valid,cookieA)).json.accepted,true);
+  const verified = (await call('/api/dashboard','GET',undefined,cookieA)).json;
+  assert.equal(verified.learner.xp,dataA.learner.xp+30);
+  assert.equal(verified.problems.find(p=>p.id===1).status,'done');
+  assert.equal(JSON.stringify(verified).includes('expected'),false);
+  assert.equal((await call('/api/dashboard','GET',undefined,cookieB)).json.problems.find(p=>p.id===1).status,'new');
+  const demo = await db.collection('video_lessons').findOne({demo:true,published:true});
+  assert.ok(demo);
+  const html = await (await fetch(origin+'/courses/'+demo.courseId,{headers:{Cookie:cookieA}})).text();
+  assert.ok(html.includes('youtube-nocookie.com/embed/'));
+  assert.ok(html.includes('VIDEO DEMO'));
+  assert.equal((await fetch(origin+'/admin/judge',{redirect:'manual'})).status,307);
+  const expires = Math.floor(Date.now()/1000)+60;
+  const signature = createHmac('sha256',process.env.ADMIN_SESSION_SECRET ?? 'change-this-admin-session-secret').update(String(expires)).digest('hex');
+  const adminCookie = `dolphinx_admin=${expires}.${signature}`;
+  for (const url of ['/admin/judge','/admin/academy']) {
+    const response = await fetch(origin+url,{headers:{Cookie:adminCookie}});
+    assert.equal(response.status,200);
+    const page = await response.text();
+    assert.ok(page.includes(url.endsWith('judge') ? 'Kiểm chứng &amp; lưu' : 'Sửa video / giáo án'));
+  }
+  const roadmapPath = "/api/roadmaps/frontend";
+  const step = { nodeId: "web-foundations-0", status: "done" };
+  assert.equal((await call(roadmapPath, "PUT", step)).status, 401);
+  assert.equal((await call(roadmapPath, "PUT", { ...step, nodeId: "unknown" }, cookieA)).status, 400);
+  assert.equal((await call(roadmapPath, "PUT", step, cookieA, "https://wrong.example")).status, 403);
+  assert.equal((await call(roadmapPath, "PUT", step, cookieA)).status, 200);
+  assert.equal((await call(roadmapPath, "GET", undefined, cookieA)).json.statuses[step.nodeId], "done");
+  assert.equal((await call(roadmapPath, "GET", undefined, cookieB)).json.statuses[step.nodeId], undefined);
+  assert.equal((await call(roadmapPath)).json.statuses[step.nodeId], undefined);
+  assert.equal((await call(roadmapPath, "PUT", { ...step, status: "learning" }, cookieA)).status, 200);
+  assert.equal((await call(roadmapPath, "GET", undefined, cookieA)).json.statuses[step.nodeId], "learning");
+  assert.equal(await db.collection("learning_activity").countDocuments({userId:a.json.user.id}),1);
+  assert.equal((await call("/api/roadmaps/missing")).status, 404);
+  assert.equal((await call("/api/auth", "DELETE", undefined, cookieA)).status, 200);
+  assert.equal((await call("/api/auth", "GET", undefined, cookieA)).json.user, null);
+  const login = await call("/api/auth", "POST", { mode: "login", email: emails[0], password });
+  assert.equal(login.status, 200);
+  assert.notEqual(login.cookie.split(";")[0], cookieA);
+  await db.collection("user_sessions").updateMany({ userId: a.json.user.id }, { $set: { expiresAt: new Date(0) } });
+  assert.equal((await call("/api/auth", "GET", undefined, login.cookie.split(";")[0])).json.user, null);
+  assert.equal((await call("/api/auth", "GET", undefined, "dolphinx_session=" + "a".repeat(64))).json.user, null);
+  let limited;
+  for (let attempt = 0; attempt < 11; attempt++) {
+    limited = await call("/api/auth", "POST", { mode: "login", email: emails[0], password: "invalidpassword" });
+    if (limited.status === 429) break;
+  }
+  assert.equal(limited.status, 429);
+  console.log("PASS: registration, validation, duplicate email, login, logout, session revocation, origin checks, guest guards and account data isolation.");
+} finally {
+  const users = await db.collection("users").find({ email: { $in: emails } }).toArray();
+  const ids = users.map(user => user._id.toString());
+  await db.collection("user_sessions").deleteMany({ userId: { $in: ids } });
+  await db.collection("course_progress").deleteMany({ learnerId: { $in: ids } });
+  await db.collection("user_problem_progress").deleteMany({ learnerId: { $in: ids } });
+  await db.collection("roadmap_progress").deleteMany({ userId: { $in: ids } });
+  await db.collection("learning_activity").deleteMany({ userId: { $in: ids } });
+  await db.collection("submissions").deleteMany({ learnerId: { $in: ids } });
+  await db.collection('judge_leases').deleteMany({ _id: { $in: ids } });
+  await db.collection("users").deleteMany({ _id: { $in: users.map(user => user._id) } });
+  await client.close();
+  console.log("Removed only test accounts and their test sessions/progress.");
+}

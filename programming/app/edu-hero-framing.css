@@ -1,0 +1,15 @@
+/* Keep faces above the overlapping title panel, including on wide screens. */
+.edu.ed-editorial .ed-page-hero > img {
+  height: clamp(300px, 35vw, 520px);
+  object-position: center 25%;
+}
+.edu.ed-editorial .ed-page-hero > .edu-container { margin-top: -35px; }
+.edu.ed-editorial .ed-page-hero-group > img { height: clamp(400px, 47vw, 800px); object-position: center top; }
+.edu.ed-editorial .ed-page-hero-group > .edu-container { margin-top: -20px; }
+.edu .ed-hero-credit { margin-top: 18px; font-size: 11px; color: #647b91; line-height: 1.6; }
+@media (max-width: 600px) {
+  .edu.ed-editorial .ed-page-hero > img { height: 280px; }
+  .edu.ed-editorial .ed-page-hero > .edu-container { margin-top: -20px; }
+  .edu.ed-editorial .ed-page-hero-group > img { height: auto; aspect-ratio: 3/2; }
+  .edu.ed-editorial .ed-page-hero-group > .edu-container { margin-top: 0; }
+}

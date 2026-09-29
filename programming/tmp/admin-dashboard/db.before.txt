@@ -1,0 +1,245 @@
+import "server-only";
+import { courseSeed, problemSeed } from "./content";
+import { getMongoDatabase, getMongoClient } from "./mongodb";
+import { getSessionUser } from "./user-auth";
+import { ObjectId } from "mongodb";
+import { activitySummary } from "./activity";
+import { calculateProgress } from "./course-progress";
+import type { Course, DashboardData, Problem, SubmissionResult } from "./types";
+
+type LearnerDocument = {
+  id: string;
+  email: string;
+  name: string;
+  initials: string;
+  level: number;
+  xp: number;
+  streak: number;
+  bestStreak: number;
+};
+
+export type AdminSubmission = {
+  id: string;
+  learnerName: string;
+  problemTitle: string;
+  language: string;
+  accepted: boolean;
+  runtimeMs: number;
+  createdAt: string;
+};
+
+export type AdminData = {
+  courses: Course[];
+  problems: Problem[];
+  learners: LearnerDocument[];
+  submissions: AdminSubmission[];
+  stats: { courses: number; problems: number; learners: number; submissions: number; accepted: number };
+};
+
+async function ensureSeeded() {
+  const db = await getMongoDatabase();
+  const marker = await db.collection("app_meta").findOne({ _id: "seed-v1" as never });
+  if (marker) return db;
+
+  await Promise.all([
+    db.collection("courses").insertMany(courseSeed.map((course) => ({ ...course, createdAt: new Date(), updatedAt: new Date() })), { ordered: false }).catch(() => undefined),
+    db.collection("problems").insertMany(problemSeed.map((problem) => ({ ...problem, createdAt: new Date(), updatedAt: new Date() })), { ordered: false }).catch(() => undefined),
+  ]);
+
+  const courseProgress = courseSeed.map((course, index) => ({ learnerId: 1, courseId: course.id, progress: index === 0 ? 36 : index === 2 ? 12 : 0, updatedAt: new Date() }));
+  const problemProgress = problemSeed.map((problem) => ({ learnerId: 1, problemId: problem.id, status: [1, 2, 5].includes(problem.id) ? "done" : [3, 7].includes(problem.id) ? "started" : "new", updatedAt: new Date() }));
+  await Promise.all([
+    db.collection("course_progress").insertMany(courseProgress, { ordered: false }).catch(() => undefined),
+    db.collection("problem_progress").insertMany(problemProgress, { ordered: false }).catch(() => undefined),
+    db.collection("app_meta").updateOne({ _id: "seed-v1" as never }, { $set: { seededAt: new Date() } }, { upsert: true }),
+  ]);
+  return db;
+}
+
+export async function getDashboardData(): Promise<DashboardData> {
+  const db = await ensureSeeded();
+  const user = await getSessionUser();
+  const learnerId = user?.id ?? null;
+  const [account, courseDocuments, problemDocuments, problemProgress, judgeConfigs] = await Promise.all([
+    user ? db.collection("users").findOne({ _id: new ObjectId(user.id) }, { projection: { xp: 1, level: 1 } }) : null,
+    db.collection<Omit<Course, "progress">>("courses").find().sort({ createdAt: 1 }).toArray(),
+    db.collection<Omit<Problem, "status">>("problems").find().sort({ id: 1 }).toArray(),
+    user ? db.collection<{ problemId: number; status: Problem["status"] }>("user_problem_progress").find({ learnerId, verified: true }).toArray() : [],
+    db.collection('judge_configs').find({ enabled: true }, { projection: { problemId: 1 } }).toArray(),
+  ]);
+
+  const activity = activitySummary(user ? (await db.collection("learning_activity").find({ userId: user.id }, { projection: { day: 1 } }).toArray()).map(item => item.day as string) : []);
+  const learner = { name: user?.name ?? "Khách", initials: user ? user.name.split(/\s+/).slice(-2).map(part => part[0]).join("").toUpperCase() : "KH", level: account?.level ?? 1, xp: account?.xp ?? 0, streak: activity.streak, bestStreak: activity.bestStreak };
+  const [publishedLessons, completions] = await Promise.all([
+    db.collection("video_lessons").find({ published: true }, { projection: { courseId: 1 } }).toArray(),
+    user ? db.collection("lesson_progress").find({ learnerId, completed: true }).toArray() : [],
+  ]);
+  const statusByProblem = new Map(problemProgress.map((item) => [item.problemId, item.status]));
+  const courses = courseDocuments.map(({ _id, ...course }) => {
+    void _id;
+    return { ...course, progress: calculateProgress(publishedLessons.filter(l => l.courseId === course.id).map(l => l._id.toString()), completions.filter(l => l.courseId === course.id).map(l => l.lessonId)) };
+  });
+  const problems = problemDocuments.map(({ _id, ...problem }) => {
+    void _id;
+    return { ...problem, gradingEnabled: judgeConfigs.some(config => config.problemId === problem.id), status: statusByProblem.get(problem.id) ?? "new" as const };
+  });
+
+  return {
+    today: activity.today,
+    learner: { name: learner.name, initials: learner.initials, level: learner.level, xp: learner.xp, streak: learner.streak, bestStreak: learner.bestStreak },
+    courses,
+    problems,
+    topics: ["Tất cả", ...new Set(problems.map((problem) => problem.topic))],
+    solvedCount: problems.filter((problem) => problem.status === "done").length,
+    totalProblems: problems.length,
+    learningDays: activity.learningDays,
+    weeklyActivity: activity.weeklyActivity,
+  };
+}
+
+export async function saveSubmission(problemId: number, language: string, code: string, result: SubmissionResult) {
+  const user = await getSessionUser();
+  if (!user) throw new Error("Vui lòng đăng nhập.");
+  const db = await ensureSeeded();
+  if (!await db.collection("problems").findOne({ id: problemId })) throw new Error("Bài tập không tồn tại.");
+  const progress = db.collection<{ _id: string; learnerId: string; problemId: number; status: string; verified: boolean; updatedAt: Date }>("user_problem_progress");
+  await progress.findOneAndUpdate(
+    { _id: `${user.id}:${problemId}` },
+    [{ $set: { learnerId: user.id, problemId, status: { $cond: [{ $and: [{ $eq: ["$status", "done"] }, { $eq: ["$verified", true] }] }, "done", result.accepted ? "done" : "started"] }, verified: true, updatedAt: new Date() } }],
+    { upsert: true, returnDocument: "before" },
+  );
+  await db.collection("submissions").insertOne({ learnerId: user.id, problemId, language, code, accepted: result.accepted, passed: result.passed, total: result.total, verified: true, runtimeMs: result.runtimeMs, createdAt: new Date() });
+  // Reward and its idempotency marker are updated atomically in one user document.
+  // A retry after an interrupted save can repair the reward without granting it twice.
+  if (result.accepted) await db.collection("users").updateOne({ _id: new ObjectId(user.id), gradedProblemIds: { $ne: problemId } }, { $inc: { xp: 30 }, $addToSet: { gradedProblemIds: problemId } });
+}
+
+export async function getAdminData(): Promise<AdminData> {
+  const db = await ensureSeeded();
+  const [dashboard, accounts, rawSubmissions, activityDays] = await Promise.all([
+    getDashboardData(),
+    db.collection("users").find({}, { projection: { name: 1, email: 1, level: 1, xp: 1 } }).sort({ _id: -1 }).toArray(),
+    db.collection<{ learnerId: string; problemId: number; language: string; accepted: boolean; runtimeMs: number; createdAt: Date }>("submissions").find().sort({ createdAt: -1 }).limit(100).toArray(),
+    db.collection<{ userId: string; day: string }>("learning_activity").find({}, { projection: { userId: 1, day: 1 } }).toArray(),
+  ]);
+  const daysByUser = new Map<string, string[]>();
+  for (const item of activityDays) daysByUser.set(item.userId, [...(daysByUser.get(item.userId) ?? []), item.day]);
+  const learners: LearnerDocument[] = accounts.map(account => {
+    const id = account._id.toString();
+    const activity = activitySummary(daysByUser.get(id) ?? []);
+    return { id, name: account.name, email: account.email, initials: account.name.trim().split(/\s+/).slice(-2).map((part: string) => part[0]).join('').toUpperCase(), level: account.level ?? 1, xp: account.xp ?? 0, streak: activity.streak, bestStreak: activity.bestStreak };
+  });
+  const learnerNames = new Map(learners.map((learner) => [learner.id, learner.name]));
+  const problemNames = new Map(dashboard.problems.map((problem) => [problem.id, problem.title]));
+  const submissions = rawSubmissions.map((submission) => ({
+    id: submission._id.toString(),
+    learnerName: learnerNames.get(submission.learnerId) ?? `Học viên #${submission.learnerId}`,
+    problemTitle: problemNames.get(submission.problemId) ?? `Bài #${submission.problemId}`,
+    language: submission.language,
+    accepted: submission.accepted,
+    runtimeMs: submission.runtimeMs,
+    createdAt: submission.createdAt.toISOString(),
+  }));
+  return {
+    courses: dashboard.courses,
+    problems: dashboard.problems,
+    learners,
+    submissions,
+    stats: {
+      courses: dashboard.courses.length,
+      problems: dashboard.problems.length,
+      learners: learners.length,
+      submissions: submissions.length,
+      accepted: submissions.filter((submission) => submission.accepted).length,
+    },
+  };
+}
+
+function slugify(value: string) {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/đ/g, "d").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+}
+
+export async function upsertAdminCourse(input: Partial<Course> & { title: string }) {
+  const db = await ensureSeeded();
+  const id = input.id || `${slugify(input.title)}-${new ObjectId().toHexString()}`;
+  const course = {
+    id,
+    title: input.title.trim(),
+    description: input.description?.trim() || "Khóa học mới trên DolphinX.",
+    icon: input.icon?.trim() || "</>",
+    color: input.color || "blue",
+    level: input.level?.trim() || "Cơ bản",
+    lessons: Number(input.lessons) || 1,
+    students: input.students?.trim() || "0",
+    modules: input.modules?.filter(Boolean) ?? [],
+    updatedAt: new Date(),
+  };
+  const result = await db.collection("courses").updateOne({ id }, { $set: course, $setOnInsert: { createdAt: new Date() } }, { upsert: !input.id });
+  if (input.id && !result.matchedCount) throw new Error("Khóa học đã bị xóa. Vui lòng tải lại trang.");
+  return id;
+}
+
+export async function deleteAdminCourse(id: string) {
+  const db = await ensureSeeded();
+  const session = (await getMongoClient()).startSession();
+  try {
+    await session.withTransaction(async () => {
+      await db.collection("courses").deleteOne({ id }, { session });
+      for (const name of ["course_progress", "lesson_progress", "video_lessons", "course_access", "course_enrollments"]) {
+        await db.collection(name).deleteMany({ courseId: id }, { session });
+      }
+    });
+  } finally { await session.endSession(); }
+}
+
+export async function upsertAdminProblem(input: Partial<Problem> & { title: string }) {
+  const db = await ensureSeeded();
+  const highest = (await db.collection<{ id: number }>("problems").find().sort({ id: -1 }).limit(1).next())?.id ?? 0;
+  const sequence = input.id ? null : await db.collection<{ _id: string; value: number }>("content_sequences").findOneAndUpdate(
+    { _id: "problems" }, [{ $set: { value: { $add: [{ $max: [{ $ifNull: ["$value", 0] }, highest] }, 1] } } }],
+    { upsert: true, returnDocument: "after" },
+  );
+  const id = input.id || sequence!.value;
+  const problem = {
+    id,
+    slug: input.slug || slugify(input.title),
+    title: input.title.trim(),
+    topic: input.topic?.trim() || "Tổng hợp",
+    difficulty: input.difficulty || "Dễ",
+    acceptance: input.acceptance || "0%",
+    statement: input.statement?.trim() || "Mô tả bài toán đang được cập nhật.",
+    exampleInput: input.exampleInput?.trim() || "input",
+    exampleOutput: input.exampleOutput?.trim() || "output",
+    explanation: input.explanation?.trim() || "",
+    constraints: input.constraints?.filter(Boolean) ?? [],
+    starterCode: input.starterCode || "function solve(input) {\n  return input;\n}",
+    updatedAt: new Date(),
+  };
+  const result = await db.collection("problems").updateOne({ id }, { $set: problem, $setOnInsert: { createdAt: new Date() } }, { upsert: !input.id });
+  if (input.id && !result.matchedCount) throw new Error("Bài tập đã bị xóa. Vui lòng tải lại trang.");
+  return id;
+}
+
+export async function deleteAdminProblem(id: number) {
+  const db = await ensureSeeded();
+  const session = (await getMongoClient()).startSession();
+  try {
+    await session.withTransaction(async () => {
+      await db.collection<{ _id: string; value: number }>("content_sequences").updateOne({ _id: "problems" }, { $max: { value: id } }, { upsert: true, session });
+      await db.collection("problems").deleteOne({ id }, { session });
+      for (const name of ["problem_progress", "user_problem_progress", "submissions", "judge_configs"]) {
+        await db.collection(name).deleteMany({ problemId: id }, { session });
+      }
+      await db.collection<{ gradedProblemIds: number[] }>("users").updateMany({}, { $pull: { gradedProblemIds: id } }, { session });
+    });
+  } finally { await session.endSession(); }
+}
+
+export async function updateAdminLearner(id: string, input: Pick<LearnerDocument, 'name' | 'level' | 'xp'>) {
+  if (!/^[a-f0-9]{24}$/i.test(id)) throw new Error("ID học viên không hợp lệ.");
+  if (typeof input.name !== 'string' || !input.name.trim() || input.name.trim().length > 100) throw new Error("Tên học viên không hợp lệ.");
+  if (!Number.isSafeInteger(input.level) || input.level < 1 || !Number.isSafeInteger(input.xp) || input.xp < 0) throw new Error("Cấp độ hoặc XP không hợp lệ.");
+  const db = await ensureSeeded();
+  const result = await db.collection("users").updateOne({ _id: new ObjectId(id) }, { $set: { name: input.name.trim(), level: input.level, xp: input.xp, updatedAt: new Date() } });
+  if (!result.matchedCount) throw new Error("Không tìm thấy tài khoản học viên.");
+}
