@@ -25,7 +25,9 @@ function isAllowedMediaUrl(value) {
     return url.protocol === "https:"
       && (url.hostname === "fullhousedev.com"
         || url.hostname.endsWith(".fullhousedev.com")
-        || url.hostname.endsWith(".amazonaws.com"));
+        || url.hostname.endsWith(".amazonaws.com")
+        || url.hostname === "idrivee2.com"
+        || url.hostname.endsWith(".idrivee2.com"));
   } catch {
     return false;
   }
