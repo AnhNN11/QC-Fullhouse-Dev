@@ -1,9 +1,0 @@
-import Link from "next/link";
-import Brand from "@/app/brand";
-import AcademyForm from "@/app/academy/form";
-import { requestConsultation } from "@/app/academy/actions";
-import "@/app/academy.css";
-
-export default function ConsultationPage() {
-  return <main className="academy"><header><Brand/><Link href="/courses">Khám phá khóa học ↗</Link></header><section className="consult-grid"><div><span>ONLINE · 1 MENTOR : 1 HỌC VIÊN</span><h1>Lộ trình riêng.<br/>Tiến bộ thật.</h1><p>Bắt đầu từ điều bạn muốn làm được. Chúng mình cùng tìm điểm xuất phát, lựa chọn mentor và thiết kế nhịp học phù hợp.</p>{[["01", "Lắng nghe mục tiêu", "Bạn chia sẻ kinh nghiệm, khó khăn và thời gian có thể dành cho việc học."], ["02", "Thiết kế lộ trình", "Thống nhất nội dung, hình thức học online và mục tiêu từng chặng."], ["03", "Học cùng mentor", "Giải đáp trực tiếp, review bài làm và điều chỉnh theo tiến độ cá nhân."]].map(([n, title, text]) => <article key={n}><b>{n}</b><div><h3>{title}</h3><p>{text}</p></div></article>)}</div><aside><h2>Kể một chút về bạn</h2><p>Để đội ngũ chuẩn bị buổi tư vấn phù hợp.</p><AcademyForm action={requestConsultation} label="Gửi yêu cầu tư vấn ↗"><label>Tên của bạn<input name="name" required maxLength={100} autoComplete="name" /></label><label>Email hoặc số điện thoại<input name="contact" required maxLength={150}/></label><label>Bạn muốn học để làm gì?<textarea name="goal" required rows={4} maxLength={2000} placeholder="Ví dụ: học Python từ đầu, làm website, chuẩn bị phỏng vấn…"/></label><label>Khung giờ thuận tiện<input name="availability" required maxLength={300} placeholder="Ví dụ: tối thứ 3 và thứ 5"/></label><input name="website" tabIndex={-1} autoComplete="off" className="hidden" aria-hidden="true"/><label className="consent"><input name="consent" type="checkbox" required/>Tôi đồng ý để DolphinX liên hệ về yêu cầu tư vấn này.</label></AcademyForm></aside></section></main>;
-}

@@ -1,5 +1,0 @@
-.edu h1.ed-animated-headline>span{background:none;-webkit-text-fill-color:currentColor}
-.ed-headline-word{display:inline-block;animation:ed-word-arrive .55s cubic-bezier(.2,.65,.3,1) var(--word-delay,0ms) both}
-@keyframes ed-word-arrive{from{opacity:0;transform:translateY(.22em)}to{opacity:1;transform:translateY(0)}}
-@media(prefers-reduced-motion:reduce){.ed-headline-word{animation:none}}
-@media print{.ed-headline-word{animation:none}}
