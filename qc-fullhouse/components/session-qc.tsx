@@ -36,6 +36,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import dayjs from "dayjs";
 import styles from "./session-qc.module.css";
+import { normalizeFullhouseCookie } from "@/lib/fullhouse-cookie.mjs";
 
 type QcSession = {
   id: string;
@@ -83,39 +84,6 @@ function vietnamDate(offsetDays = 0) {
   return `${values.year}-${values.month}-${values.day}`;
 }
 
-function isFullhouseDomain(value: unknown) {
-  const domain = String(value ?? "").trim().replace(/^\./, "").toLowerCase();
-  return domain === "fullhousedev.com" || domain.endsWith(".fullhousedev.com");
-}
-
-function cookiesFromFile(text: string) {
-  const trimmed = text.trim();
-  try {
-    const parsed = JSON.parse(trimmed) as Array<{ domain?: string; name?: string; value?: string }> | { cookies?: Array<{ domain?: string; name?: string; value?: string }> };
-    const rows = Array.isArray(parsed) ? parsed : parsed.cookies;
-    if (Array.isArray(rows)) {
-      const cookie = rows
-        .filter((item) => isFullhouseDomain(item.domain) && item.name)
-        .map((item) => `${item.name}=${item.value ?? ""}`)
-        .join("; ");
-      if (cookie) return cookie;
-    }
-  } catch {
-    // Continue with Netscape or raw Cookie formats.
-  }
-
-  const netscapeCookie = trimmed.split(/\r?\n/)
-    .filter((line) => line && !line.startsWith("#"))
-    .map((line) => line.split("\t"))
-    .filter((parts) => parts.length >= 7 && isFullhouseDomain(parts[0]))
-    .map((parts) => `${parts[5]}=${parts[6]}`)
-    .join("; ");
-  if (netscapeCookie) return netscapeCookie;
-  const rawCookie = trimmed.replace(/^Cookie:\s*/i, "");
-  if (/(^|;\s*)sessionid=/.test(rawCookie)) return rawCookie;
-  throw new Error("File không có cookie sessionid của fullhousedev.com.");
-}
-
 function audioSummary(row: QcSession) {
   const parts = [];
   if (row.notebookAudioSize) parts.push(`${(row.notebookAudioSize / 1024 / 1024).toFixed(1)} MB`);
@@ -141,6 +109,7 @@ export default function SessionQc() {
   const [selected, setSelected] = useState<QcSession | null>(null);
   const [crawlOpen, setCrawlOpen] = useState(false);
   const [crawling, setCrawling] = useState(false);
+  const [crawlError, setCrawlError] = useState<string | null>(null);
   const [form] = Form.useForm();
   const [crawlForm] = Form.useForm();
 
@@ -251,25 +220,28 @@ export default function SessionQc() {
 
   async function runWebCrawl(values: { cookie: string; contestCode?: string; crawlDate?: dayjs.Dayjs }) {
     setCrawling(true);
+    setCrawlError(null);
     try {
       const response = await fetch("/api/local-crawl", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          cookie: values.cookie,
+          cookie: normalizeFullhouseCookie(values.cookie),
           contestCode: values.contestCode,
           crawlDate: values.crawlDate?.format("YYYY-MM-DD") ?? vietnamDate(-1),
           generateAudio: true,
         }),
       });
-      const result = (await response.json()) as { message?: string; error?: string };
+      const result = await response.json().catch(() => {
+        throw new Error(`Máy chủ trả về HTTP ${response.status} không phải JSON. Kiểm tra proxy và log API crawl.`);
+      }) as { message?: string; error?: string };
       if (!response.ok) throw new Error(result.error ?? "Không thể chạy crawler");
       message.success(result.message ?? "Đã crawl xong");
       crawlForm.resetFields();
       setCrawlOpen(false);
       await loadData();
     } catch (error) {
-      message.error(error instanceof Error ? error.message : "Không thể chạy crawler", 8);
+      setCrawlError(error instanceof Error ? error.message : "Không thể chạy crawler");
     } finally {
       setCrawling(false);
     }
@@ -390,6 +362,7 @@ export default function SessionQc() {
           description="Chỉ sử dụng trên hệ thống QC nội bộ. Cookie được gửi đến máy chủ để chạy crawler và không được lưu sau khi kết thúc."
           className={styles.modalAlert}
         />
+        {crawlError && <Alert type="error" showIcon title="Crawl chưa hoàn tất" description={crawlError} className={styles.modalAlert} />}
         <Form form={crawlForm} layout="vertical" onFinish={runWebCrawl} preserve={false} initialValues={{ crawlDate: dayjs(vietnamDate(-1)) }}>
           <Form.Item label="Tải file cookie">
             <Upload
@@ -398,11 +371,13 @@ export default function SessionQc() {
               showUploadList={false}
               beforeUpload={async (file) => {
                 try {
-                  const cookie = cookiesFromFile(await file.text());
+                  const cookie = normalizeFullhouseCookie(await file.text());
+                  setCrawlError(null);
                   crawlForm.setFieldValue("cookie", cookie);
                   message.success("Đã đọc cookie Fullhouse từ file");
                 } catch (error) {
-                  message.error(error instanceof Error ? error.message : "Không đọc được file cookie");
+                  crawlForm.setFieldValue("cookie", "");
+                  setCrawlError(error instanceof Error ? error.message : "Không đọc được file cookie");
                 }
                 return Upload.LIST_IGNORE;
               }}

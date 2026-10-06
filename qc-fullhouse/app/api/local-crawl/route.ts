@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { NextResponse } from "next/server";
+import { normalizeFullhouseCookie } from "@/lib/fullhouse-cookie.mjs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,15 +56,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Một lượt crawl khác đang chạy. Vui lòng chờ hoàn tất." }, { status: 409 });
   }
 
+  let ownsLock = false;
   try {
     const body = (await request.json()) as CrawlPayload;
-    const cookie = body.cookie?.trim() ?? "";
+    let cookie: string;
+    try {
+      cookie = normalizeFullhouseCookie(body?.cookie);
+    } catch {
+      return NextResponse.json({ error: "Cookie không hợp lệ. Cần sessionid không rỗng; hỗ trợ JSON, Netscape hoặc name=value." }, { status: 400 });
+    }
     const contestCode = body.contestCode?.trim() ?? "";
     const crawlDate = body.crawlDate?.trim() ?? "";
     const generateAudio = body.generateAudio !== false;
-    if (cookie.length < 12 || !/(^|;\s*)sessionid=/.test(cookie)) {
-      return NextResponse.json({ error: "Cookie không hợp lệ. Cần có giá trị sessionid=..." }, { status: 400 });
-    }
     if (contestCode && !/^[a-zA-Z0-9_-]{1,100}$/.test(contestCode)) {
       return NextResponse.json({ error: "Mã contest không hợp lệ." }, { status: 400 });
     }
@@ -71,7 +75,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Ngày crawl phải có định dạng YYYY-MM-DD." }, { status: 400 });
     }
 
+    // Recheck after reading the body: another request may have acquired the lock.
+    if (crawlRunning) {
+      return NextResponse.json({ error: "Một lượt crawl khác đang chạy. Vui lòng chờ hoàn tất." }, { status: 409 });
+    }
     crawlRunning = true;
+    ownsLock = true;
     const result = await runCrawler(cookie, contestCode, crawlDate, generateAudio);
     const summary = result.stdout.trim().split("\n").filter(Boolean).at(-1) ?? "Đã crawl xong.";
     return NextResponse.json({ message: summary });
@@ -79,6 +88,6 @@ export async function POST(request: Request) {
     const message = error instanceof Error ? error.message : "Không thể chạy crawler.";
     return NextResponse.json({ error: message.slice(0, 2_000) }, { status: 500 });
   } finally {
-    crawlRunning = false;
+    if (ownsLock) crawlRunning = false;
   }
 }

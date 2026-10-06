@@ -1,3 +1,4 @@
+import { normalizeFullhouseCookie } from "../lib/fullhouse-cookie.mjs";
 import nextEnv from "@next/env";
 import * as cheerio from "cheerio";
 import fs from "node:fs";
@@ -21,39 +22,7 @@ if (requestedDate && !/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) {
   throw new Error("Ngày crawl phải có định dạng YYYY-MM-DD.");
 }
 
-function isFullhouseDomain(value) {
-  const domain = String(value ?? "").trim().replace(/^\./, "").toLowerCase();
-  return domain === "fullhousedev.com" || domain.endsWith(".fullhousedev.com");
-}
-
-function cookieFromFile(filePath) {
-  const text = fs.readFileSync(filePath, "utf8").trim();
-  try {
-    const parsed = JSON.parse(text);
-    const rows = Array.isArray(parsed) ? parsed : parsed.cookies;
-    if (Array.isArray(rows)) {
-      const value = rows
-        .filter((item) => isFullhouseDomain(item.domain) && item.name)
-        .map((item) => `${item.name}=${item.value ?? ""}`)
-        .join("; ");
-      if (value) return value;
-    }
-  } catch {
-    // Continue with Netscape or raw Cookie formats.
-  }
-  const netscape = text.split(/\r?\n/)
-    .filter((line) => line && !line.startsWith("#"))
-    .map((line) => line.split("\t"))
-    .filter((parts) => parts.length >= 7 && isFullhouseDomain(parts[0]))
-    .map((parts) => `${parts[5]}=${parts[6]}`)
-    .join("; ");
-  if (netscape) return netscape;
-  const raw = text.replace(/^Cookie:\s*/i, "");
-  if (/(^|;\s*)sessionid=/.test(raw)) return raw;
-  return "";
-}
-
-const cookie = cookieFile ? cookieFromFile(cookieFile) : process.env.FULLHOUSE_SESSION_COOKIE?.trim();
+const cookie = normalizeFullhouseCookie(cookieFile ? fs.readFileSync(cookieFile, "utf8") : process.env.FULLHOUSE_SESSION_COOKIE);
 
 if (!uri) throw new Error("MONGODB_URI chưa được cấu hình.");
 if (!cookie || !/(^|;\s*)sessionid=/.test(cookie)) {
@@ -209,6 +178,7 @@ try {
     ? { code: requestedContest }
     : { sourceUrl: { $regex: "fullhousedev\\.com/contest/" } };
   const contests = await db.collection("contests").find(contestQuery).sort({ endTime: 1 }).toArray();
+  if (!contests.length) throw new Error("Không tìm thấy contest để crawl. Kiểm tra danh sách lớp hoặc mã contest.");
   const teacherIds = [...new Set(contests.flatMap((contest) => Array.isArray(contest.teacherIds) ? contest.teacherIds.map(String) : []))];
   const teachers = await db.collection("teachers").find({
     _id: { $in: teacherIds.filter(ObjectId.isValid).map((id) => new ObjectId(id)) },
@@ -335,6 +305,7 @@ try {
   ]);
   const audioSummary = generateNotebookAudio ? `, ${audioReady} audio NotebookLM, ${audioFailed} audio lỗi` : "";
   console.log(`\nHoàn tất: ${imported} buổi, ${withRecordings} buổi có recording${audioSummary}, ${failed} contest lỗi.`);
+  if (failed === contests.length) throw new Error("Không crawl được contest nào. Kiểm tra phiên Fullhouse và quyền truy cập lớp.");
 } finally {
   await client.close();
 }

@@ -1,8 +1,9 @@
 import type { NextConfig } from "next";
+import { crawlerRuntimeFiles } from "./scripts/lib/crawler-runtime-files.mjs";
 
 const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
-    "/api/local-crawl": ["./scripts/**/*.mjs", "./node_modules/ffmpeg-static/ffmpeg"],
+    "/api/local-crawl": ["./scripts/**/*.mjs", "./lib/fullhouse-cookie.mjs", ...crawlerRuntimeFiles(process.cwd())],
   },
 };
 

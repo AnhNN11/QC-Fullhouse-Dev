@@ -44,6 +44,10 @@ Các route `/api/manage/*` hỗ trợ `GET`, `POST`, `PUT` và `DELETE`. Contest
 3. Tải file `cookies.txt`/JSON export từ trình duyệt hoặc dán giá trị Cookie có `sessionid`.
 4. Bấm **Bắt đầu crawl**. Cookie chỉ được dùng trong lần chạy hiện tại và không được lưu vào MongoDB.
 
+Import và API dùng chung bộ chuẩn hóa cookie: hỗ trợ JSON `{ "name": "sessionid", "value": "..." }`, mảng JSON, `{ "cookies": [...] }`, Netscape (kể cả `#HttpOnly_`) và chuỗi `sessionid=...; csrftoken=...` có hoặc không có tiền tố `Cookie:`. JSON thiếu domain được hiểu là cookie người dùng cung cấp cho Fullhouse; domain khai báo khác Fullhouse bị loại. Chỉ chấp nhận import khi có `sessionid` không rỗng. Đây là kiểm tra định dạng, không đảm bảo phiên còn hiệu lực trên Fullhouse.
+
+Khi crawl thất bại, lỗi được giữ trong hộp thoại. Nếu proxy trả HTML hoặc hết thời gian chờ, giao diện hiển thị mã HTTP thay vì lỗi parse JSON. Kiểm tra log server tương ứng; không đưa giá trị cookie vào log hoặc ảnh chụp. Chạy `npm run test:cookie` để kiểm tra parser trước khi triển khai.
+
 Ngoài ra có thể chạy bằng CLI bằng cách đặt `FULLHOUSE_SESSION_COOKIE` trong `.env.local` rồi chạy:
 
 ```bash
